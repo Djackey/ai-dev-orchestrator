@@ -460,3 +460,88 @@ stricter parser consumed it.
 
 Luna, Terra, and Sol were not re-invoked. This round changed no Codex invocation
 argument, no runtime contract, and no lane guard.
+
+## Post-merge defect S-000 — UTF-8 repository paths — 2026-09-04
+
+Found during Shadow preflight against a real target repository, after V1 merged
+to fork `main`. This is a portability defect in an existing guard, not a feature.
+Scope was limited to `scripts/worktree-delta.rb`, its regression test, and this
+record; routing, agents, model mapping, and contract semantics were untouched.
+
+### Reproduction before the fix
+
+An isolated Git fixture with one ASCII file (`README.md`) and two non-ASCII
+files (`推广.md`, `doc/测试/案例.txt`), with the locale cleared:
+
+```text
+$ env -u LANG -u LC_ALL ruby scripts/worktree-delta.rb snapshot "$STATE" "$FIXTURE"
+worktree-delta.rb:20:in `split': invalid byte sequence in US-ASCII (ArgumentError)
+exit=1
+```
+
+`LANG=C LC_ALL=C` failed identically. Exit `1` is outside the guard's own exit
+contract: the process died with a stacktrace rather than reporting a guard
+error.
+
+### Root cause
+
+`collect_state` split the `git ls-files -z` output without forcing an encoding.
+Ruby tags that output with the process's default external encoding, which is
+US-ASCII when the locale is unset or C/POSIX, so the first non-ASCII byte in any
+repository path raised `ArgumentError`. The baseline JSON was also read and
+written with the locale's default encoding, so a baseline containing non-ASCII
+keys could not round-trip either.
+
+### Fix
+
+Repository paths are now interpreted under a UTF-8 repository-path contract
+independent of the process locale:
+
+- the `git ls-files -z` payload is forced to UTF-8 and explicitly checked with
+  `valid_encoding?` **before** splitting, because splitting invalid bytes raises
+  before any per-path check could name the broken contract;
+- the repository root, the state-file path, and symlink targets go through the
+  same explicit validation;
+- the baseline JSON is written and read with an explicit `UTF-8` encoding;
+- path data that is not valid UTF-8 fails closed as a guard error rather than
+  crashing or being silently skipped; and
+- `ArgumentError` and `Encoding::CompatibilityError` join the outer rescue so no
+  encoding failure can escape the exit contract.
+
+The exit contract is unchanged: `changed` is `0`, guard error is `2`, `empty` is
+`3`. ASCII repositories behave exactly as before.
+
+### Regression coverage
+
+`tests/worktree-delta-contract.sh` now runs every case with `LANG` and `LC_ALL`
+cleared rather than inheriting the caller's shell, and adds UTF-8 coverage:
+
+| Case | Result |
+|---|---|
+| ASCII paths, locale cleared: empty, modified, added, deleted | unchanged behavior |
+| snapshot of UTF-8 non-ASCII paths, locale cleared | `STATUS: captured`, `FILES: 3` |
+| unchanged UTF-8 worktree, locale cleared | `STATUS: empty`, exit `3` |
+| modified UTF-8 path, locale cleared | `CHANGE: modified: doc/测试/案例.txt`, exit `0` |
+| baseline reread and reported under C/POSIX | `CHANGE: modified: doc/测试/案例.txt` |
+| snapshot under C/POSIX, check under cleared locale | `CHANGE: modified: 推广.md` |
+| invalid UTF-8 path data | exit `2`, `WORKTREE DELTA ERROR ... is not valid UTF-8`, no stacktrace |
+
+This host's filesystem rejects invalid UTF-8 filenames with `EILSEQ`, so the
+invalid-path case injects the bad bytes through a `git` shim on `PATH` instead
+of creating such a file. The suite was run against the pre-fix script and fails
+at the first UTF-8 case with the original stacktrace, then passes against the
+fixed script; the ASCII cases pass in both.
+
+### Verification
+
+| Gate | Result |
+|---|---|
+| `tests/worktree-delta-contract.sh`, 10 cases | PASS |
+| `./scripts/validate-contracts.sh` | PASS, 90 checks |
+| `claude plugin validate --strict .` | PASS |
+| `git diff --check` | clean |
+
+Read-only smoke against the real Shadow target, with **no locale workaround**
+(`LANG` and `LC_ALL` cleared, and again under C/POSIX): snapshot captured 2409
+files, `check` returned `STATUS: empty` with exit `3` in both, and the target
+repository was byte-for-byte unmodified.
