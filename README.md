@@ -1,118 +1,267 @@
-# Fable Advisor
+# AI Development Orchestrator V1
 
-**Fable 5.1 runs the show. Codex does the typing at the effort each task deserves, and Fable reviews before anything ships.**
+**Plan with the best available reasoning model.**
 
-<a href="https://github.com/DannyMac180/fable-advisor/raw/main/assets/fable-advisor-demo.mp4"><img src="assets/fable-advisor-demo-poster.png" alt="30-second demo: Fable 5.1 orchestrates, GPT-5.6 Luna implements, Fable 5.1 reviews" width="100%"></a>
+**Execute with the cheapest model that can reliably satisfy the spec.**
 
-<p align="center"><em>▶ 30s demo — Fable 5.1 orchestrates → GPT-5.6 Luna implements → Fable 5.1 reviews</em></p>
+**Escalate only when material judgment remains.**
 
-Claude Code lets every subagent run on a different model — and lets the session itself run on a different model than its subagents. This plugin exploits that with the **architect pattern**: your session runs on **Fable 5.1**, acting as a full-time architect. It owns requirements, decomposition, specs, and verification — routes every implementation task to the right lane at the right reasoning effort — and gets a clean-context **Fable 5.1** review of the finished work before calling anything done:
+Investigate evidence before editing when the root cause is uncertain. Verify
+actual evidence independently. Use fresh-context review before high-risk work
+ships. Human authorization owns Production.
 
-| Lane | Producer | Invocation | Route here when |
+<a href="https://github.com/DannyMac180/fable-advisor/raw/main/assets/fable-advisor-demo.mp4"><img src="assets/fable-advisor-demo-poster.png" alt="Fable advisor orchestration demo" width="100%"></a>
+
+This is an additive evolution of
+[fable-advisor](https://github.com/DannyMac180/fable-advisor) by Dan McAteer. It
+preserves the lightweight Claude Code plugin + agents + orchestration skill
+architecture. V1 is policy, prompts, and contracts for long-lived software
+development—not a new agent platform.
+
+## Attribution and package identity
+
+Upstream `fable-advisor` is the origin of this work. Its MIT
+[`LICENSE`](LICENSE) and copyright are preserved unchanged, the original agent
+filenames and skill layout are kept for low-conflict syncing, and the demo asset
+above is upstream's.
+
+This fork ships under its own package identity so it can never collide with
+upstream installs, updates, or future releases:
+
+| | Upstream | This fork |
+|---|---|---|
+| Plugin name | `fable-advisor` | `ai-dev-orchestrator` |
+| Marketplace name | `fable-advisor` | `ai-dev-orchestrator` |
+| Owner / author | Dan McAteer | Djackey |
+| Homepage | `DannyMac180/fable-advisor` | `Djackey/ai-dev-orchestrator` |
+| Version line | 5.x | starts at `0.1.0` |
+
+Fork versions are independent and deliberately restart at `0.1.0`; they are not
+a continuation of upstream's 5.x series and carry no compatibility claim about
+it. The `fable-advisor` name survives only as the *agent* filename for the
+clean-context reviewer role, which keeps upstream merges small.
+
+## Architecture
+
+The workflow uses abstract roles so model defaults can change without rewriting
+the doctrine:
+
+| Role | Current default | Component | Purpose |
 |---|---|---|---|
-| Routine | **GPT-5.6 Luna** | `codex-implementer` agent (default) | The spec fully determines the outcome — Codex does the typing via the [Codex CLI](https://github.com/openai/codex) |
-| High-complexity | **GPT-5.6 Sol** | `sol-implementer` agent | One-off tasks where judgment the spec can't capture decides the outcome: subtle concurrency, hard debugging, security-sensitive paths, wide refactors |
-| Review | **Fable 5.1** | `fable-advisor` agent | Commitment boundaries, and **always once at the end** — the advisor reviews the accumulated changes before the architect reports done |
+| `ARCHITECT_FRONTIER` | Fable 5.1 session | current session | requirements, decomposition, architecture, routing, verdicts |
+| `EVIDENCE_EXPLORER` | GPT-5.6 Terra | `evidence-explorer` | read-only exploration and evidence synthesis |
+| `IMPLEMENTER_MECHANICAL` | GPT-5.6 Luna | `codex-implementer` | spec-determined implementation |
+| `IMPLEMENTER_BALANCED` | GPT-5.6 Terra | `terra-implementer` | ordinary software engineering with local judgment |
+| `IMPLEMENTER_FRONTIER` | GPT-5.6 Sol | `sol-implementer` | high-risk, judgment-heavy escalation |
+| `VISUAL_IMPLEMENTER` | Claude Opus, optional | not shipped in V1 | visual/UX and Claude-ecosystem work after runtime pin evidence is reliable |
+| `CLEAN_CONTEXT_REVIEWER` | Fable 5.1 | `fable-advisor` | fresh-context, assumption-reset review |
+| `HUMAN_RELEASE_AUTHORITY` | the user | explicit decision | Production authorization |
 
-**Nothing is pinned to a reasoning effort.** The architect names the effort per task in the spec (`REASONING: low … max`, and `ultra` on Sol), and the lanes pass it through unchanged — mechanical edits run cheap and fast, the hard escalations run at max or ultra. The session and the advisor run at whatever `/effort` you set.
+These are current defaults, not architecture. Fable can move to Astra or a newer
+frontier architect; Luna, Terra, and Sol can move to newer implementers. The
+contracts and routing rule stay the same.
 
-Tokens route by capability: Fable emits judgment and specs, the cross-vendor lanes emit all of the code, and the premium is spent only where it changes outcomes: the architecture and the final review. Because both implementation lanes are a *different model family* than the architect, cross-vendor review is built into the routing, not bolted on. For high-stakes work, run `codex-implementer` and `sol-implementer` on the same spec and let the architect pick the stronger diff.
+The reviewer and current architect are in the same model family. Clean context
+is useful, but it is not a cross-family independent review. The optional Opus
+role is also same-vendor and cannot supply that independence.
 
-The plugin ships the **orchestration skill** — the routing doctrine that teaches the session when to use each lane and each effort rung, the cost discipline that keeps Fable token volume minimal (emit judgment not volume, keep context lean, reason once then hand off), the six-part spec contract that makes context-free delegation safe, the verification rules that keep every lane honest, and how to fold in the official [Codex plugin for Claude Code](https://github.com/openai/codex-plugin-cc) when it's installed.
+## Routing: judgment remaining after the spec
 
-## Go deeper
+1. Does the spec essentially determine one implementation?
+   `IMPLEMENTER_MECHANICAL` / Luna.
+2. If not, is the remaining work ordinary engineering judgment with controlled
+   error cost and blast radius? `IMPLEMENTER_BALANCED` / Terra.
+3. If material judgment is high-risk or wide-blast-radius,
+   `IMPLEMENTER_FRONTIER` / Sol.
 
-I write [**Attention Heads**](https://attentionheads.substack.com/?utm_source=github&utm_medium=readme&utm_campaign=fable-advisor) — deep, evidence-backed writing on AI, cognition, and agentic engineering. The **Agentic Engineering Field Notes** series is where I publish practical advice on the craft of using AI. [Subscribe](https://attentionheads.substack.com/subscribe?
+Do not route by file count, token count, model price, or the user's word
+"important". Sol is not the default implementer.
 
-## Install
+| Mechanical / Luna | Balanced / Terra | Frontier / Sol |
+|---|---|---|
+| rename, repetitive edit, CRUD, wiring, config/docs, pattern-matched tests, schema/type propagation | multi-file feature, architecture integration, moderate debugging, persistence/recovery, API + frontend interaction, local refactor judgment | subtle concurrency, billing, auth/security, migration, distributed state, hard debugging, races, release infrastructure, wide-blast-radius refactor |
 
-```
-claude plugin marketplace add DannyMac180/fable-advisor
-claude plugin install fable-advisor@fable-advisor
-```
+After failure, the architect first distinguishes `SPEC_FAILURE`,
+`IMPLEMENTATION_FAILURE`, and `TASK_MISCLASSIFICATION`. Luna can move to Terra
+when ordinary judgment was misclassified. Terra gets a corrected spec when the
+spec was wrong; failure again under an adequate corrected spec may justify Sol.
+There is no automatic "one failure means stronger model" rule.
 
-Updating an existing installation to the latest release:
+## Evidence first
 
-```
-claude plugin marketplace update fable-advisor
-claude plugin update fable-advisor@fable-advisor
-```
+Two kinds of work start with
+[`EVIDENCE_FIRST_SPEC`](contracts/EVIDENCE_FIRST_SPEC.md): reactive Production
+incidents and hard debugging whose root cause is unproven, and proactive
+high-risk change in billing, auth, security, concurrency, migrations,
+distributed state, storage, and release infrastructure. The `evidence-explorer`
+runs Terra under Codex `read-only` sandbox and separates:
 
-Then start your session as the architect:
+- direct `OBSERVED` evidence;
+- `INFERRED` conclusions;
+- `UNRESOLVED` questions;
+- root-cause confidence; and
+- the next evidence most likely to change the verdict.
 
-```
-/model fable
-```
+The evidence spec deliberately contains no implementation file list. An
+evidence-first task creates an
+[`IMPLEMENTATION_SPEC`](contracts/IMPLEMENTATION_SPEC.md) only after the
+architect records `EVIDENCE_GATE_SATISFIED`, and two paths reach that gate:
 
-**Lite mode — one file, 30 seconds.** Don't want the full pattern? Copy [`agents/fable-advisor.md`](agents/fable-advisor.md) into `~/.claude/agents/` and keep your session on Sonnet. You get advisor consults at commitment boundaries without the orchestration layer (see "Advisor-only mode" below).
+```text
+incident / defect / debugging
+  evidence -> ROOT_CAUSE_CONFIRMED -> EVIDENCE_GATE_SATISFIED -> IMPLEMENTATION_SPEC
 
-## Requirements
-
-- **Claude Code ≥ 2.1.170** with a subscription that includes Fable 5.1 (Pro, Max, Team, or Enterprise — all current consumer plans qualify). The agents use the `fable` alias, which resolves to Fable 5.1.
-- **No Fable access** (e.g. API-key billing)? Change `model: fable` → `model: opus` in `agents/fable-advisor.md` and run the session on Opus. Same pattern, the Fable role shifts down to Opus.
-- **Both implementation lanes** need the [OpenAI Codex CLI](https://github.com/openai/codex) installed and authenticated (`npm i -g @openai/codex`, then `codex login`). `codex-implementer` invokes **GPT-5.6 Luna** (`gpt-5.6-luna`, efforts low–max) and `sol-implementer` invokes **GPT-5.6 Sol** (`gpt-5.6-sol`, efforts low–ultra). GPT-5.6 access may be limited during preview; without model access, an installed/authenticated CLI, or successful authentication, a lane reports `STATUS: unavailable` — it never silently falls back to a Claude model. Without Codex at all, the pattern degrades to advisor-only mode (below).
-- **Optional: the [Codex plugin for Claude Code](https://github.com/openai/codex-plugin-cc)** (`/plugin marketplace add openai/codex-plugin-cc`, then `/plugin install codex@openai-codex`). When it's enabled, the orchestration skill uses `/codex:adversarial-review` as a GPT-family second reviewer ahead of the Fable review, `/codex:rescue` as a user-driven delegation path, and `/codex:setup` to diagnose a lane that reports `unavailable`. Not a dependency — the lanes drive `codex exec` directly either way.
-- Heads-up: if a pinned Claude model isn't available on your account, Claude Code silently falls back to your session model — the pattern degrades quietly rather than erroring. If advisor verdicts feel unremarkable, check your plan. (This quiet fallback applies only to Claude model pins — the codex lanes always fail loudly with a structured error.)
-
-Model resolution order in Claude Code: `CLAUDE_CODE_SUBAGENT_MODEL` env var → per-invocation `model` parameter → agent frontmatter → session model. Effort resolution: `CLAUDE_CODE_EFFORT_LEVEL` env var → agent frontmatter `effort` → session `/effort`. None of this plugin's agents set `effort`, so the advisor follows your session; the codex lanes take theirs from the spec.
-
-## Use it
-
-With the session on Fable, just ask for work — the orchestration skill routes it:
-
-```
-Add rate limiting to our public API. Design it, delegate the
-implementation, and verify the evidence before you call it done.
-```
-
-The architect writes the spec, picks the lane and effort (rate limiting touches concurrency — a good case for `sol-implementer` at `max`, or for racing it against `codex-implementer` and picking the stronger diff), reads the diff and verification evidence when the report comes back, sends the finished work to `fable-advisor` for the final review, and only then reports done.
-
-To make the doctrine always-on, add one line to your project's `CLAUDE.md`:
-
-```
-You are the architect — minimize your own token volume. Delegate all
-implementation through the orchestration skill's routing table (never
-type code yourself), name a reasoning effort per task, delegate broad
-codebase exploration to cheap read-only agents, verify evidence before
-accepting any lane's report, and get a fable-advisor review before
-reporting any deliverable done.
-```
-
-## Commitment boundaries and the final review
-
-Even the architect gets a second opinion. The `fable-advisor` agent is a read-only skeptic on the same model as the architect but in a clean context — — consulted before architecture decisions, migrations, API designs, whenever a problem has resisted two attempts, and **always once at the end of a deliverable**, where it reads the accumulated diff with fresh eyes, against the stated goal rather than the conversation, and returns ship / fix-first / rethink. It never implements. It sees the code fresh, without your conversation's accumulated assumptions — that context-clean skepticism is what the final review buys. For an independent-model review on top, the Codex plugin's `/codex:adversarial-review` slots in just before it.
-
-## Advisor-only mode (the original pattern)
-
-The minimal arrangement, for when you'd rather skip the orchestration layer: run the session on Sonnet and consult `fable-advisor` only at commitment boundaries.
-
-```
-Migrate our checkout sessions from Postgres to Redis — plan it,
-consult your advisor before committing, then implement.
+proactive high-risk change
+  evidence / architecture / invariants / safety case
+                           -> EVIDENCE_GATE_SATISFIED -> IMPLEMENTATION_SPEC
 ```
 
-A typical consult costs cents. To make it automatic, add to your project's `CLAUDE.md`:
+A defect owes a root cause, or an explicit bounded risk acceptance. A new
+migration, auth, billing, or concurrency feature has no defect to explain, so it
+owes evidence, invariants, authority boundaries, forbidden actions, a write
+threshold, and stop conditions instead — never a fabricated root cause.
 
+The gate is scoped to evidence-first work. Ordinary feature, refactor, and
+change work needs only a sufficiently determined implementation direction. Not
+every implementation requires `ROOT_CAUSE_CONFIRMED`.
+
+## Workflow modes
+
+- **FAST:** Architect → Luna → actual diff → verification → Architect acceptance.
+  Add fresh-context review when risk warrants it.
+- **STANDARD:** Architect → evidence when needed → Luna or Terra → deterministic
+  verification → clean-context review → Architect verdict.
+- **CRITICAL:** Architect → evidence → root-cause verdict → Terra or Sol →
+  deterministic verification → adversarial/fresh-context review → exact-SHA
+  staging readiness → explicit human authorization.
+
+CRITICAL work never finishes because an implementer says PASS.
+
+## Lane contract
+
+All Codex-backed implementers use the shared
+[`IMPLEMENTATION_LANE_CONTRACT`](contracts/IMPLEMENTATION_LANE_CONTRACT.md):
+
+- explicit model and per-task effort, with observable runtime resolution;
+- no silent fallback or effort rounding;
+- `workspace-write` sandbox narrowed to the workdir, so `/tmp` and `$TMPDIR`
+  stay outside it and guard baselines cannot be rewritten by the model;
+- portable bash/zsh timeout construction, with no uncapped retry;
+- unique prompt/transcript/final files;
+- actual task-delta inspection and an empty-diff refusal guard;
+- a protected local-state guard over sensitive ignored paths;
+- independent verification re-run; and
+- structured reports.
+
+Reports are claims, not evidence. The orchestrator inspects the diff and runs
+verification itself. The evidence lane applies the same resolution discipline
+with `read-only` sandbox and a pre/post workspace-mutation check.
+
+### Protected local state
+
+The worktree content baseline covers tracked and nonignored untracked files, and
+deliberately does not scan the ignored tree or `node_modules`. A short explicit
+list is guarded separately by
+[`scripts/protected-paths.rb`](scripts/protected-paths.rb): `.env`, `.env.*`,
+`.claude/settings.local.json`, `.codex/`, `.npmrc`, plus any repository-relative
+glob a project declares in `.ai-orchestrator-protected-paths`. Existence, type,
+mode, and content hash are compared before and after every lane. The guard state
+lives outside everything the model can write, which is why the lane contract
+excludes `/tmp` and `$TMPDIR` from `workspace-write` and requires the startup
+summary to read `sandbox: workspace-write [workdir]`.
+
+Any change is a violation by default and forces `STATUS: refused`, so an
+implementer cannot make verification pass by editing local secrets or local tool
+configuration, and cannot widen its own room by editing the protected-path list.
+A task that genuinely needs a local ignored-config change stops and reports it;
+only explicit human or architect authorization handles it, as separate work.
+
+Clean-context review is also resolved at runtime. Only an `AVAILABLE` capability
+report with captured Fable `modelUsage` and a consumable verdict counts as a
+completed review; `REVIEWER_UNAVAILABLE` is never silently skipped.
+
+## Model availability is a runtime boundary
+
+The repository records defaults, never guarantees account access. Every lane
+starts with a working-binary/auth check, requests its model explicitly, and
+requires the Codex startup summary to show the requested model, effort, and
+sandbox. Unavailable or unobservable resolution fails loudly; Terra never
+silently becomes Luna, Sol never becomes Terra, and Codex never silently becomes
+Claude.
+
+Claude Code accepts `model:` frontmatter aliases, but an unavailable pinned
+Claude model can silently fall back. A normal nested-agent report does not expose
+enough metadata to prove the resolved model. V1 therefore keeps the existing
+Fable advisor pin with an explicit warning and does not ship the optional Opus
+write lane yet. See the dated [capability audit](docs/CAPABILITY_AUDIT.md).
+
+The `model: sonnet` frontmatter on Codex implementers selects their lightweight
+Claude supervisor. Luna/Terra/Sol are selected only by the captured `codex exec`
+invocation.
+
+## Human authority boundary
+
+"Fix it", "push this forward", and "handle the Production issue" do not
+authorize any agent to:
+
+- merge main;
+- deploy or migrate Production;
+- mutate a Production database or billing system;
+- enable a Production feature flag;
+- perform a destructive storage operation; or
+- perform another irreversible external operation.
+
+Agents may report `READY_FOR_STAGING` or `READY_FOR_PRODUCTION_CANARY`. The user
+must explicitly authorize the next external action.
+
+## Install for local review
+
+This V1 is not published. Validate or load the checkout directly:
+
+```sh
+claude plugin validate --strict .
+claude --plugin-dir .
 ```
-Before committing to any architecture decision, migration, or refactor
-touching 3+ files, consult the fable-advisor agent and act on its verdict.
+
+The Codex lanes resolve an explicit `AI_ORCHESTRATOR_CODEX_BIN` first, otherwise
+`codex` from PATH, and validate executable/version/auth before use. An explicit
+invalid binary never falls back to PATH, and a broken PATH shim is unavailable.
+For a non-default installation, configure it explicitly for the session:
+
+```sh
+export AI_ORCHESTRATOR_CODEX_BIN=/path/to/working/codex
 ```
 
-## FAQ
+Account access to a model does not repair a broken PATH entry or native binary.
 
-**Is this Anthropic's "advisor tool"?** No — that's a server-side API feature. These are plain Claude Code subagents plus a skill: readable, editable, no beta flags.
+## Validation
 
-**Does this work on claude.ai?** No — subagent model routing is Claude Code only (CLI, desktop, VS Code, web).
+The repository intentionally uses lightweight contract tests:
 
-**Why not just let Fable write the code too?** You can. It's excellent. It's also the most expensive model per token, and most of a session's tokens are implementation mechanics that the codex lanes handle at near-parity — and from a different vendor, which buys you a real second opinion. Spend the premium where it changes outcomes: the architecture and the final review.
+```sh
+./scripts/validate-contracts.sh
+```
 
-**Upgrading from v4?** v5 moves the session architect from Opus to **Fable 5.1**, replaces the Fable 5 `fable-implementer` lane with **`sol-implementer`** (GPT-5.6 Sol via Codex), and **unpins reasoning effort everywhere** — the architect names it per task in a new sixth spec line. The advisor is now Fable 5.1. The Codex plugin integration is new and optional. If you still want a Claude implementation lane, grab [`fable-implementer.md` from the v4.0 tree](https://github.com/DannyMac180/fable-advisor/blob/ad2bdc3/agents/fable-implementer.md).
+They validate manifests and independently parse frontmatter, agent/contract references, current role
+mapping, routing invariants, timeout argument construction under bash and zsh,
+fallback/empty-diff/verification guards, the evidence read-only boundary, the
+human authority boundary, and unwanted automatic Production paths.
 
-**Upgrading from v3?** v4 moved the architect to Opus, removed the Grok 4.5 lane, and made `codex-implementer` the default typing lane; if you still want the Grok lane, grab [`grok-implementer.md` from the v3.1 tree](https://github.com/DannyMac180/fable-advisor/blob/b3b50a9/agents/grok-implementer.md).
+## Upstream sync
 
-**Why GPT lanes in a Claude plugin?** Vendor diversity. Models from one family share blind spots; an independent implementation from a different lineage catches what same-family review misses — and with Claude as the architect and reviewer, every diff gets cross-vendor review for free. The architect and reviewer stay Claude — the lanes are producers, not judges.
-utm_source=github&utm_medium=readme&utm_campaign=fable-advisor) to get new posts to your inbox.
+This fork retains the upstream layout, license, assets, and the three original
+agent filenames. It deliberately does **not** retain the upstream plugin or
+marketplace name; see [Attribution and package identity](#attribution-and-package-identity). Intentional doctrine changes are concentrated in
+`README.md`, `skills/orchestration/SKILL.md`, and the three upstream agent files;
+new roles and contracts are additive.
+
+For future updates, fetch `upstream`, review `upstream/main`, then use the team's
+normal merge or rebase policy. Expect the highest conflict probability in the
+README, orchestration skill, and Luna/Sol agent prompts. Resolve only intentional
+doctrine differences; keep new contracts and agents additive. Do not delete or
+broadly rename upstream files.
 
 ## License
 
-MIT
+MIT. The upstream [`LICENSE`](LICENSE) and its copyright notice are preserved
+unchanged; this fork adds no separate license terms.

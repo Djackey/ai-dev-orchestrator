@@ -1,23 +1,26 @@
 {
-  "name": "fable-advisor",
-  "version": "5.0.0",
-  "description": "Run your session on Fable 5.1 as a full-time architect: it writes specs and verdicts and picks a reasoning effort per task, GPT-5.6 Luna (via Codex) does the routine typing, GPT-5.6 Sol takes the high-complexity one-offs — and Fable 5.1 reviews every deliverable before it ships.",
+  "name": "ai-dev-orchestrator",
+  "version": "0.1.0",
+  "description": "Evidence-first, capability-routed development orchestration: frontier architecture, Luna mechanical implementation, Terra balanced implementation and exploration, Sol escalation, independent verification, fresh-context review, and explicit human Production authority.",
   "author": {
-    "name": "Dan McAteer",
-    "url": "https://github.com/DannyMac180"
+    "name": "Djackey",
+    "url": "https://github.com/Djackey"
   },
-  "homepage": "https://github.com/DannyMac180/fable-advisor",
+  "homepage": "https://github.com/Djackey/ai-dev-orchestrator",
+  "repository": "https://github.com/Djackey/ai-dev-orchestrator",
   "license": "MIT",
   "keywords": [
     "agents",
     "model-routing",
+    "orchestration",
+    "architect",
+    "evidence-first",
+    "human-gated",
+    "codex",
+    "reasoning-effort",
     "fable",
     "sol",
     "luna",
-    "advisor",
-    "orchestration",
-    "architect",
-    "codex",
-    "reasoning-effort"
+    "terra"
   ]
 }
