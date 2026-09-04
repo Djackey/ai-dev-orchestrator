@@ -31,6 +31,7 @@ The roles are stable; the model mapping is replaceable.
 | `IMPLEMENTER_MECHANICAL` | GPT-5.6 Luna | `codex-implementer` |
 | `IMPLEMENTER_BALANCED` | GPT-5.6 Terra | `terra-implementer` |
 | `IMPLEMENTER_FRONTIER` | GPT-5.6 Sol | `sol-implementer` |
+| `IMPLEMENTER_CLAUDE` | Claude Sonnet 5 candidate · Opus 5 escalation | `scripts/run-claude-lane.sh` (headless, restricted) |
 | `VISUAL_IMPLEMENTER` | Claude Opus, optional | no V1 agent until pin resolution is provable at report time |
 | `CLEAN_CONTEXT_REVIEWER` | Fable 5.1 | `fable-advisor` |
 | `HUMAN_RELEASE_AUTHORITY` | the user | explicit authorization only |
@@ -247,6 +248,19 @@ it could falsely claim Opus execution.
 The Codex implementer wrapper agents use `model: sonnet`; that is the lightweight
 Claude supervisor, not the producer model. Their producer identity comes only
 from captured Codex startup evidence.
+
+## Claude implementation lane (candidate)
+
+`IMPLEMENTER_CLAUDE` runs `${CLAUDE_PLUGIN_ROOT}/scripts/run-claude-lane.sh`, a
+headless `claude -p --restricted` invocation with an explicit tool allowlist
+and deny list, plus the same `worktree-delta.rb` / `protected-paths.rb` guards
+used by the Codex lanes. It is a candidate default under a provisional
+calibration: three real specs were run against it, and 2 of 3
+`complete-candidate` results accepted by the architect made it the provisional
+default, reviewed again on every later PR. The Codex lanes remain the
+independent, cross-family capability; this lane does not replace them. The
+same failure taxonomy and human authority boundary apply. See
+`${CLAUDE_PLUGIN_ROOT}/contracts/CLAUDE_LANE_CONTRACT.md`.
 
 ## Failure taxonomy and escalation
 

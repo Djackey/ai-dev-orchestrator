@@ -1,0 +1,11 @@
+{
+  "aliases": {
+    "fable": "claude-fable-5-1",
+    "haiku": "claude-haiku-4-5-20251001",
+    "opus": "claude-opus-5",
+    "sonnet": "claude-sonnet-5"
+  },
+  "claudeVersion": "2.1.260 (Claude Code)",
+  "generatedAt": "2026-09-04T11:59:56Z",
+  "probeCostUsd": 0.6146804499999999
+}

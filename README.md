@@ -53,6 +53,7 @@ the doctrine:
 | `IMPLEMENTER_MECHANICAL` | GPT-5.6 Luna | `codex-implementer` | spec-determined implementation |
 | `IMPLEMENTER_BALANCED` | GPT-5.6 Terra | `terra-implementer` | ordinary software engineering with local judgment |
 | `IMPLEMENTER_FRONTIER` | GPT-5.6 Sol | `sol-implementer` | high-risk, judgment-heavy escalation |
+| `IMPLEMENTER_CLAUDE` | Claude Sonnet 5 candidate · Opus 5 escalation | `scripts/run-claude-lane.sh` (headless, restricted) |
 | `VISUAL_IMPLEMENTER` | Claude Opus, optional | not shipped in V1 | visual/UX and Claude-ecosystem work after runtime pin evidence is reliable |
 | `CLEAN_CONTEXT_REVIEWER` | Fable 5.1 | `fable-advisor` | fresh-context, assumption-reset review |
 | `HUMAN_RELEASE_AUTHORITY` | the user | explicit decision | Production authorization |
@@ -198,6 +199,19 @@ write lane yet. See the dated [capability audit](docs/CAPABILITY_AUDIT.md).
 The `model: sonnet` frontmatter on Codex implementers selects their lightweight
 Claude supervisor. Luna/Terra/Sol are selected only by the captured `codex exec`
 invocation.
+
+## Claude implementation lane (candidate)
+
+`IMPLEMENTER_CLAUDE` runs `scripts/run-claude-lane.sh`, a headless
+`claude -p --restricted` invocation with an explicit tool allowlist and deny
+list, plus the same `worktree-delta.rb` / `protected-paths.rb` guards used by
+the Codex lanes. It is a candidate default under a provisional calibration:
+three real specs were run against it, and 2 of 3 `complete-candidate` results
+accepted by the architect made it the provisional default, reviewed again on
+every later PR. The Codex lanes remain the independent, cross-family
+capability; this lane does not replace them. The same failure taxonomy and
+human authority boundary apply. See
+[`contracts/CLAUDE_LANE_CONTRACT.md`](contracts/CLAUDE_LANE_CONTRACT.md).
 
 ## Human authority boundary
 

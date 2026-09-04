@@ -114,3 +114,43 @@ the marketplace manifest but returned an empty `contents` list; it did not prove
 agent or skill frontmatter validity. V1 therefore also parses every agent and
 the orchestration skill with Ruby's YAML parser in
 `scripts/validate-frontmatter.rb`.
+
+## Claude lane probes — 2026-09-04
+
+Measured by the architect on Claude Code 2.1.260, with `claude.ai` OAuth auth
+and the `firstParty` provider. These are point-in-time observations, not a
+portability promise.
+
+Alias probes via `claude -p --output-format json --max-turns 1`:
+
+| Requested alias | Observed `modelUsage` canonical model | Probe cost (USD) |
+|---|---|---|
+| `sonnet` | `claude-sonnet-5` | `0.0794` |
+| `opus` | `claude-opus-5` | `0.1656` |
+| `haiku` | `claude-haiku-4-5-20251001` | `0.0259` |
+| `fable` | `claude-fable-5-1` | proven earlier in this file |
+
+`--restricted --tools Bash --allowedTools "Bash(pnpm test:*)" --permission-prompts none`:
+a `curl` command was denied and appeared in `permission_denials`; a `git commit`
+command was denied and appeared in `permission_denials`.
+
+`--restricted` with `Read,Edit,Write`: a `Write` to `/tmp`, outside the working
+directory, was denied and appeared in `permission_denials`; a `Write` to
+`./.env`, inside the working directory, was ALLOWED when no deny rule was set.
+
+`--settings '{"permissions":{"deny":["Edit(./.env)","Write(./.env)","Write(./.git/**)",...]}}'`:
+writes to `./.env` and `./.git/hooks/pre-commit` were refused with "File is in
+a directory that is denied by your permission settings", the file system was
+unchanged, and these refusals did NOT appear in `permission_denials` — so the
+deterministic protected-paths guard remains the load-bearing check, not
+`--settings` alone.
+
+`--max-budget-usd 0.005`: the run ended with `subtype error_max_budget_usd` and
+`is_error true`.
+
+The in-session Agent tool (haiku probe) returned only text and token counts, no
+model identity; therefore the lane is a headless CLI runner, not a nested
+agent.
+
+`--fallback-model` exists in this CLI version and must never be passed by a
+lane.
