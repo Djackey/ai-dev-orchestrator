@@ -154,3 +154,16 @@ agent.
 
 `--fallback-model` exists in this CLI version and must never be passed by a
 lane.
+
+## Claude lane dogfood observations — 2026-09-04
+
+Two boundary observations from dogfooding the Claude lane:
+
+(a) Under `--restricted` with a Bash allowlist, an attempted `perl -pi`
+in-place file edit was denied and appeared in `permission_denials`, so file
+mutation must go through the Edit/Write tools where the deny list applies.
+
+(b) An allowlist prefix such as `Bash(pnpm exec:*)` is broad — `pnpm exec tsx
+<script>` runs arbitrary repository code — so an architect who allows it
+accepts that the implementer can execute code it wrote; the worktree-delta
+guard still reports every resulting file change.

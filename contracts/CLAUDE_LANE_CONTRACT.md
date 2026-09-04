@@ -145,3 +145,12 @@ exclusively with `HUMAN_RELEASE_AUTHORITY`, exactly as in
 - `--restricted` confines the file tools to the working directories but does
   not bound the network; `NETWORK: bounded by the Bash allowlist only`
   remains the honest statement.
+
+## Calibration record
+
+The calibration rule: three real specs dispatched to this lane on `sonnet`;
+the lane becomes the provisional default implementer if the architect accepts
+at least 2 of 3 `complete-candidate` results after independently re-running
+verification and reading the actual diff. The dated record of the completed
+calibration lives in `acceptance/ACCEPTANCE_EVIDENCE.md` under "Claude lane
+calibration".

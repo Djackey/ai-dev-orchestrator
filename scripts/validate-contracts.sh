@@ -213,6 +213,12 @@ if rg --quiet -- 'dangerously-skip-permissions' scripts/run-claude-lane.sh; then
 fi
 printf 'PASS: Claude lane invocation boundary contract\n'
 
+require_text acceptance/ACCEPTANCE_EVIDENCE.md '## Claude lane calibration'
+require_text README.md 'provisional** default implementer'
+require_text skills/orchestration/SKILL.md 'provisional** default implementer'
+require_text contracts/CLAUDE_LANE_CONTRACT.md '## Calibration record'
+printf 'PASS: Claude lane calibration is recorded\n'
+
 ./tests/timeout-contract.sh
 ./tests/codex-resolution-contract.sh
 ./tests/reviewer-contract.sh

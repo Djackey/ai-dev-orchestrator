@@ -545,3 +545,37 @@ Read-only smoke against the real Shadow target, with **no locale workaround**
 (`LANG` and `LC_ALL` cleared, and again under C/POSIX): snapshot captured 2409
 files, `check` returned `STATUS: empty` with exit `3` in both, and the target
 repository was byte-for-byte unmodified.
+
+## Claude lane calibration — 2026-09-04
+
+Calibration rule: three real specs dispatched to the Claude lane on `sonnet`;
+the lane becomes the provisional default implementer if the architect accepts
+at least 2 of 3 `complete-candidate` results after independently re-running
+verification and reading the actual diff. Provisional means: reviewed again
+on every later PR; never a long-term capability proof.
+
+| # | Task | Repository | Model / effort | Turns | Cost (USD) | Boundary events | Guards | Architect verification | Outcome |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | Implement the Claude lane itself (runner, parser, probe, contract test, docs) | this repository | `claude-sonnet-5` / xhigh | 55 | 3.15 | 7 Bash denials (environment probing such as `which`, `ls /usr/bin`, a direct `validate-frontmatter.rb` call) | worktree delta changed; protected state unchanged | 11/11 lane contract cases; full contract validation passed under a UTF-8 locale; a pre-existing locale defect in `validate-frontmatter.rb` surfaced | accepted with two FIX_FIRST items (calibration sentence written in the past tense; residual gaps unrecorded), dispatched as task 2 |
+| 2 | Lane follow-up: calibration wording, residual-gaps section, locale-independent frontmatter validation, `--tools ""` on the probe | this repository | `claude-sonnet-5` / medium | 18 | 0.67 | 0 | delta changed; protected unchanged | re-run with LANG, LC_ALL and LC_CTYPE unset: 11/11 lane cases, 103 contract validations passed | accepted |
+| 3 | A product painted-door feature (an analytics-only chip row plus a vitest suite) in the downstream product repository | downstream product repository | `claude-sonnet-5` / high | 35 | 1.76 | 0 | delta changed; protected unchanged | lint (tsc) 0; targeted suites 188 tests; full suite 1984 tests | accepted |
+
+Result: 3 of 3 `complete-candidate` results accepted → **`claude-sonnet-5` is
+the provisional default implementer as of 2026-09-04.** Task 1 was invoked by
+the architect hand-bracketing the same restricted invocation and the same two
+guards before `run-claude-lane.sh` existed; tasks 2 and 3 ran through
+`run-claude-lane.sh` itself.
+
+Escalation lane evidence (not part of the calibration): one frontier task in
+the downstream product repository ran on `claude-opus-5` / xhigh through the
+same restricted invocation — 121 turns, USD 15.87, 7 Bash denials including a
+blocked in-place `perl -pi` edit (the boundary refusing an unlisted program),
+protected state unchanged; the architect re-ran lint, the three new suites
+(52 tests, including a real-driver Postgres concurrency test over a loopback
+relay) and the full suite (1874); accepted with one follow-up (`claude-sonnet-5`
+/ high, 52 turns, USD 1.85, 57 targeted tests, 1879 full) that was also
+accepted.
+
+Both the calibration table and the escalation-lane paragraph above are claims
+independently re-verified by the architect — re-run verification, actual diff
+read — never the implementer's self-report.
