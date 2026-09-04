@@ -76,6 +76,9 @@ begin
     paths = (before.keys | after.keys).sort
     changes = paths.map do |path|
       next if before[path] == after[path]
+      # A control character (e.g. embedded newline) in a changed path would
+      # let it masquerade as a second CHANGE: line to a line-based parser.
+      fail_check("changed path contains a control character: #{path.dump}") if path =~ /[\x00-\x1f]/
       kind = if !before.key?(path)
                "added"
              elsif !after.key?(path) || after[path]["type"] == "missing"

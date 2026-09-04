@@ -42,7 +42,7 @@ def read_excerpt(path)
   return "" if path.nil? || path.empty? || !File.file?(path)
 
   begin
-    File.open(path, "rb") { |f| f.read(STDERR_EXCERPT_BYTES) }.to_s.strip
+    File.open(path, "rb") { |f| f.read(STDERR_EXCERPT_BYTES) }.to_s.strip.gsub(/\s+/, " ")
   rescue StandardError
     ""
   end
@@ -150,6 +150,15 @@ unless [0, 4].include?(protected_exit) && [0, 3].include?(delta_exit)
 end
 
 changed_paths = parse_changed_paths(delta_stdout_file)
+
+# Rule 2 continued: worktree-delta reporting a change (exit 0) but yielding no
+# parsed CHANGE: lines is format drift or truncated stdout, not an empty
+# delta — trusting it would let SCOPE print "ok (0 changed paths ...)" next
+# to WORKTREE_DELTA: changed, a vacuous pass.
+if delta_exit.zero? && changed_paths.empty?
+  emit.call("unavailable", "GUARD_FAILED", "worktree-delta reported a change but no CHANGE: lines were parsed", "unavailable")
+end
+
 scope = scope_report(allow_path_globs, changed_paths)
 scope_text = scope[:text]
 

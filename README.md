@@ -53,7 +53,7 @@ the doctrine:
 | `IMPLEMENTER_MECHANICAL` | GPT-5.6 Luna | `codex-implementer` | spec-determined implementation |
 | `IMPLEMENTER_BALANCED` | GPT-5.6 Terra | `terra-implementer` | ordinary software engineering with local judgment |
 | `IMPLEMENTER_FRONTIER` | GPT-5.6 Sol | `sol-implementer` | high-risk, judgment-heavy escalation |
-| `IMPLEMENTER_CLAUDE` | Claude Sonnet 5 candidate · Opus 5 escalation | `scripts/run-claude-lane.sh` (headless, restricted) |
+| `IMPLEMENTER_CLAUDE` | Claude Sonnet 5, provisional default implementer (candidate lane) · Opus 5 escalation | `scripts/run-claude-lane.sh` (headless, restricted) | spec-determined implementation in the Claude family, restricted headless |
 | `VISUAL_IMPLEMENTER` | Claude Opus, optional | not shipped in V1 | visual/UX and Claude-ecosystem work after runtime pin evidence is reliable |
 | `CLEAN_CONTEXT_REVIEWER` | Fable 5.1 | `fable-advisor` | fresh-context, assumption-reset review |
 | `HUMAN_RELEASE_AUTHORITY` | the user | explicit decision | Production authorization |
@@ -200,7 +200,7 @@ The `model: sonnet` frontmatter on Codex implementers selects their lightweight
 Claude supervisor. Luna/Terra/Sol are selected only by the captured `codex exec`
 invocation.
 
-## Claude implementation lane (candidate)
+## Claude implementation lane — provisional default implementer (candidate lane)
 
 `IMPLEMENTER_CLAUDE` runs `scripts/run-claude-lane.sh`, a headless
 `claude -p --restricted` invocation with an explicit tool allowlist and deny
@@ -210,10 +210,10 @@ the Codex lanes. Calibration completed 2026-09-04: of the specs run through
 `complete-candidate` and was accepted by the architect after independent
 verification (one run was separately halted mid-task by an account usage
 limit — a transport failure, not a rejection — and completed in a follow-up
-session), so `claude-sonnet-5` is the **provisional** default implementer and
-`claude-opus-5` the escalation lane; provisional means reviewed again on
-every later PR and never a long-term proof of capability. The record is in
-`acceptance/ACCEPTANCE_EVIDENCE.md`. The Codex lanes remain the independent,
+session), so `claude-sonnet-5` is the **provisional** default implementer
+(candidate lane) and `claude-opus-5` the escalation lane; provisional means
+reviewed again on every later PR and never a long-term proof of capability.
+The record is in `acceptance/ACCEPTANCE_EVIDENCE.md`. The Codex lanes remain the independent,
 cross-family capability; this lane does not replace them. The same failure
 taxonomy and human authority boundary apply. See
 [`contracts/CLAUDE_LANE_CONTRACT.md`](contracts/CLAUDE_LANE_CONTRACT.md).

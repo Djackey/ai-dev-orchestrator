@@ -1,7 +1,8 @@
 # Claude Implementation Lane Contract
 
 This is the behavioral contract for the headless Claude implementation lane,
-`scripts/run-claude-lane.sh`. It is a candidate lane, not a replacement for the
+`scripts/run-claude-lane.sh`. It is the provisional default implementer
+(candidate lane), not a replacement for the
 Codex-backed lanes governed by
 [`IMPLEMENTATION_LANE_CONTRACT.md`](IMPLEMENTATION_LANE_CONTRACT.md). Both
 contracts share the same evidence discipline, guard mechanics, and human
@@ -19,6 +20,11 @@ deny list, never an ambient-trust or fully open session:
 - `--strict-mcp-config` is always passed alongside `--restricted`, so no
   ambient or project-discovered MCP server configuration is picked up; the
   lane never passes `--mcp-config`.
+- `--setting-sources ""` is always passed alongside `--strict-mcp-config`, so
+  no user, project, or local `.claude/settings.json` (including any
+  `PreToolUse`/`PostToolUse` hooks they define) is loaded into the run. The
+  explicit `--settings` deny JSON described below is still passed
+  independently of this flag.
 - `--tools "Read,Edit,Write,Grep,Glob,Bash"` names the tool surface that can
   even be attempted. `--allowedTools` is narrower: it always includes
   `Read,Edit,Write,Grep,Glob`, and only adds `Bash(PREFIX:*)` entries when the
@@ -98,6 +104,12 @@ whatever the captured JSON claims:
 | 14 | `permission_denials` present but not an array, or containing an entry that is not an object with a string `tool_name` | `unavailable` | `OUTPUT_NOT_CAPTURED` |
 | 15 | any denial's `tool_name` is `Read`, `Edit`, or `Write` | `partial` | `TOOL_PERMISSION_FAILURE` |
 | 16 | otherwise | `complete-candidate` | `none` |
+
+Rule 2 also fires when `worktree-delta` exits `0` (`changed`) but no
+`CHANGE:` lines could be parsed from its stdout: that combination is format
+drift or truncated output, not evidence of zero changed paths, so it is
+`GUARD_FAILED` rather than a `SCOPE: ok (0 changed paths ...)` next to
+`WORKTREE_DELTA: changed`.
 
 Rule 12 overrides what would otherwise read as a successful subtype: an exit
 of zero with no worktree delta is never `complete-candidate`. Rule 13 is only

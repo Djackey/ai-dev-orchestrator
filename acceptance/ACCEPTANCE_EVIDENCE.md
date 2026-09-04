@@ -561,15 +561,18 @@ on every later PR; never a long-term capability proof.
 | 3 | Claude lane — review fixes (cross-family and clean-context FIX_FIRST items), first attempt | this repository | `claude-sonnet-5` / high | 20 | 1.22 | 0 | delta changed; protected unchanged | not applicable — the run did not finish | `is_error: true`, model text "You've hit your session limit"; classified `unavailable`/`TRANSPORT_FAILED` (see the operating observation in `docs/CAPABILITY_AUDIT.md`); the worktree carried a real partial diff that a later session inspected and completed |
 | 4 | Claude lane — review fixes (cross-family and clean-context FIX_FIRST items), continuation of row 3 from the partial diff | this repository | `claude-sonnet-5` / high | 66 | 3.97 | 2 Bash denials (boundary events, neither a Read/Edit/Write) | delta changed; protected unchanged | architect re-ran `tests/claude-lane-contract.sh` (20/20) and `scripts/validate-contracts.sh` under a UTF-8 locale and with LANG, LC_ALL and LC_CTYPE unset (both passed), read the full diff, and then ran the rewritten runner end to end on the real CLI with `claude-haiku-4-5-20251001` against a throwaway git directory: `--allow-path 'src/**'` → `complete-candidate`, `SCOPE: ok (1 changed paths within 1 allowed globs)`, USD 0.03; `--allow-path 'docs/**'` on the same spec → `refused`/`SCOPE_VIOLATION` naming `src/a.txt`, exit 3, USD 0.01; both reports carried `EXPECTED_CANONICAL ... (model map 2026-09-04T11:59:56Z, claude 2.1.260 (Claude Code))` and a matching `RESOLVED_MODEL_EVIDENCE` | accepted |
 
-Result: of the first three runner-executed specs, 3 of 3 that actually
-completed reached `complete-candidate` and were accepted → **`claude-sonnet-5`
-is the provisional default implementer as of 2026-09-04.** Row 3's session
-limit was a transport failure, not a rejection of capability, and is excluded
-from that 3-of-3 count rather than counted against it. Limitation on this
-calibration: 2 of these 4 rows are the lane documenting or fixing itself
-(rows 1 and 3/4), not independent third-party tasks; the calibration is
-provisional in part for that reason, and row 2 (an unrelated downstream
-product task) is the strongest single data point.
+Result: the table above records 3 specs, not 4 — row 3 and row 4 are the same
+spec (row 3 hit a session limit before finishing; row 4 is its continuation
+from the partial diff through to completion). All 3 specs completed and all 3
+reached `complete-candidate` and were accepted (rows 1, 2, 4) →
+**`claude-sonnet-5` is the provisional default implementer as of
+2026-09-04.** Row 3 is not a fourth data point: it is a transport failure (a
+session-limit cutoff), excluded from the 3-spec count rather than counted
+against it. Limitation on this calibration: 2 of these 3 specs are the lane
+documenting or fixing itself (row 1, and the row 3/4 spec), not independent
+third-party tasks; the calibration is provisional in part for that reason,
+and row 2 (an unrelated downstream product task) is the only independent data
+point and the strongest single one.
 
 Not counted: bootstrap. Before `run-claude-lane.sh` existed, the architect
 hand-bracketed the same restricted `claude -p --restricted` invocation and the

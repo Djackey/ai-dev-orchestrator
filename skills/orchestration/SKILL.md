@@ -31,7 +31,7 @@ The roles are stable; the model mapping is replaceable.
 | `IMPLEMENTER_MECHANICAL` | GPT-5.6 Luna | `codex-implementer` |
 | `IMPLEMENTER_BALANCED` | GPT-5.6 Terra | `terra-implementer` |
 | `IMPLEMENTER_FRONTIER` | GPT-5.6 Sol | `sol-implementer` |
-| `IMPLEMENTER_CLAUDE` | Claude Sonnet 5 candidate · Opus 5 escalation | `scripts/run-claude-lane.sh` (headless, restricted) |
+| `IMPLEMENTER_CLAUDE` | Claude Sonnet 5, provisional default implementer (candidate lane) · Opus 5 escalation | `scripts/run-claude-lane.sh` (headless, restricted) |
 | `VISUAL_IMPLEMENTER` | Claude Opus, optional | no V1 agent until pin resolution is provable at report time |
 | `CLEAN_CONTEXT_REVIEWER` | Fable 5.1 | `fable-advisor` |
 | `HUMAN_RELEASE_AUTHORITY` | the user | explicit authorization only |
@@ -249,7 +249,7 @@ The Codex implementer wrapper agents use `model: sonnet`; that is the lightweigh
 Claude supervisor, not the producer model. Their producer identity comes only
 from captured Codex startup evidence.
 
-## Claude implementation lane (candidate)
+## Claude implementation lane — provisional default implementer (candidate lane)
 
 `IMPLEMENTER_CLAUDE` runs `${CLAUDE_PLUGIN_ROOT}/scripts/run-claude-lane.sh`, a
 headless `claude -p --restricted` invocation with an explicit tool allowlist
@@ -259,9 +259,10 @@ through `run-claude-lane.sh` itself, every one that finished reached
 `complete-candidate` and was accepted by the architect after independent
 verification (one run was separately halted mid-task by an account usage
 limit — a transport failure, not a rejection — and completed in a follow-up
-session), so `claude-sonnet-5` is the **provisional** default implementer and
-`claude-opus-5` the escalation lane; provisional means reviewed again on
-every later PR and never a long-term proof of capability. The record is in
+session), so `claude-sonnet-5` is the **provisional** default implementer
+(candidate lane) and `claude-opus-5` the escalation lane; provisional means
+reviewed again on every later PR and never a long-term proof of capability.
+The record is in
 `acceptance/ACCEPTANCE_EVIDENCE.md`. The Codex lanes remain the
 independent, cross-family capability; this lane does not replace them. The
 same failure taxonomy and human authority boundary apply. See

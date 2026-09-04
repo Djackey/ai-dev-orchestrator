@@ -131,6 +131,18 @@ case "${FAKE_LANE_MODE-available}" in
     printf 'stray\n' >> outside/other.txt
     printf '%s\n' '{"modelUsage":{"claude-sonnet-5":{}},"permission_denials":[],"is_error":false,"result":"done"}'
     ;;
+  malformed_denials_string)
+    printf 'edited\n' >> tracked.txt
+    printf '%s\n' '{"modelUsage":{"claude-sonnet-5":{}},"permission_denials":"not-an-array","is_error":false,"result":"done"}'
+    ;;
+  non_json_clean_exit)
+    printf 'edited\n' >> tracked.txt
+    printf 'this is not json at all\n'
+    ;;
+  transport_boom_multiline)
+    printf 'boom line one\nboom line two\n' >&2
+    exit 7
+    ;;
 esac
 EOF
 chmod +x "$SHIM_DIR/claude"
@@ -144,7 +156,7 @@ run_lane() {
   STDIN_FILE=$FIXTURE_ROOT/stdin-$name.log
   LANE_EXIT=0
   env FAKE_LANE_MODE="$mode" FAKE_LANE_ARGV_FILE="$ARGV_FILE" FAKE_LANE_STDIN_FILE="$STDIN_FILE" \
-    PATH="$SHIM_DIR:/usr/bin:/bin" \
+    PATH="$SHIM_DIR:/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin" \
     "$ROOT/scripts/run-claude-lane.sh" "$SPEC_FILE" sonnet "$REPO" --model-map "$MODEL_MAP" "$@" \
     > "$RESULT_FILE" 2>&1 || LANE_EXIT=$?
 }
@@ -211,6 +223,15 @@ assert_flag_present() {
   grep -Fx -- "$flag" "$file" >/dev/null || {
     printf 'FAIL: expected flag %s in %s\n' "$flag" "$file" >&2
     cat "$file" >&2
+    exit 1
+  }
+}
+
+assert_no_argv_log() {
+  name=$1
+  path=$2
+  [ ! -e "$path" ] || {
+    printf 'FAIL: %s: claude argv log unexpectedly exists at %s (model map should be validated before claude is invoked)\n' "$name" "$path" >&2
     exit 1
   }
 }
@@ -288,7 +309,7 @@ STALE_RESULT=$FIXTURE_ROOT/result-stale
 STALE_EXIT=0
 env FAKE_LANE_MODE=available FAKE_LANE_ARGV_FILE="$FIXTURE_ROOT/argv-stale.log" \
   FAKE_LANE_STDIN_FILE="$FIXTURE_ROOT/stdin-stale.log" \
-  PATH="$SHIM_DIR:/usr/bin:/bin" \
+  PATH="$SHIM_DIR:/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin" \
   "$ROOT/scripts/run-claude-lane.sh" "$SPEC_FILE" sonnet "$REPO" --model-map "$STALE_MODEL_MAP" \
   > "$STALE_RESULT" 2>&1 || STALE_EXIT=$?
 [ "$STALE_EXIT" -eq 1 ] || {
@@ -297,7 +318,8 @@ env FAKE_LANE_MODE=available FAKE_LANE_ARGV_FILE="$FIXTURE_ROOT/argv-stale.log" 
   exit 1
 }
 assert_report "$STALE_RESULT" unavailable MAPPING_STALE
-printf 'PASS: (j) stale model map -> unavailable/MAPPING_STALE\n'
+assert_no_argv_log '(j) stale model map' "$FIXTURE_ROOT/argv-stale.log"
+printf 'PASS: (j) stale model map -> unavailable/MAPPING_STALE, claude never invoked\n'
 
 # (k) invocation boundary: exact-argv assertions on the (a) success run.
 K_ARGV=$FIXTURE_ROOT/argv-a.log
@@ -315,6 +337,7 @@ assert_pair "$K_ARGV" '--max-budget-usd' '5'
 
 assert_flag_present "$K_ARGV" '--restricted'
 assert_flag_present "$K_ARGV" '--strict-mcp-config'
+assert_pair "$K_ARGV" '--setting-sources' ''
 assert_flag_present "$K_ARGV" '--no-session-persistence'
 
 SETTINGS_JSON=$(awk '
@@ -369,7 +392,7 @@ FUTURE_RESULT=$FIXTURE_ROOT/result-m
 FUTURE_EXIT=0
 env FAKE_LANE_MODE=available FAKE_LANE_ARGV_FILE="$FIXTURE_ROOT/argv-m.log" \
   FAKE_LANE_STDIN_FILE="$FIXTURE_ROOT/stdin-m.log" \
-  PATH="$SHIM_DIR:/usr/bin:/bin" \
+  PATH="$SHIM_DIR:/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin" \
   "$ROOT/scripts/run-claude-lane.sh" "$SPEC_FILE" sonnet "$REPO" --model-map "$FUTURE_MODEL_MAP" \
   > "$FUTURE_RESULT" 2>&1 || FUTURE_EXIT=$?
 [ "$FUTURE_EXIT" -eq 1 ] || {
@@ -378,14 +401,15 @@ env FAKE_LANE_MODE=available FAKE_LANE_ARGV_FILE="$FIXTURE_ROOT/argv-m.log" \
   exit 1
 }
 assert_report "$FUTURE_RESULT" unavailable MAPPING_STALE
-printf 'PASS: (m) model map generatedAt in the future -> unavailable/MAPPING_STALE\n'
+assert_no_argv_log '(m) future model map' "$FIXTURE_ROOT/argv-m.log"
+printf 'PASS: (m) model map generatedAt in the future -> unavailable/MAPPING_STALE, claude never invoked\n'
 
 # (n) model map claudeVersion differs from the running claude --version
 VERSION_RESULT=$FIXTURE_ROOT/result-n
 VERSION_EXIT=0
 env FAKE_LANE_MODE=available FAKE_LANE_ARGV_FILE="$FIXTURE_ROOT/argv-n.log" \
   FAKE_LANE_STDIN_FILE="$FIXTURE_ROOT/stdin-n.log" \
-  PATH="$SHIM_DIR:/usr/bin:/bin" \
+  PATH="$SHIM_DIR:/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin" \
   "$ROOT/scripts/run-claude-lane.sh" "$SPEC_FILE" sonnet "$REPO" --model-map "$VERSION_MISMATCH_MODEL_MAP" \
   > "$VERSION_RESULT" 2>&1 || VERSION_EXIT=$?
 [ "$VERSION_EXIT" -eq 1 ] || {
@@ -396,14 +420,15 @@ env FAKE_LANE_MODE=available FAKE_LANE_ARGV_FILE="$FIXTURE_ROOT/argv-n.log" \
 assert_report "$VERSION_RESULT" unavailable MAPPING_STALE
 assert_reason_contains "$VERSION_RESULT" 'fixture claude 9.9'
 assert_reason_contains "$VERSION_RESULT" 'fixture claude 1.0'
-printf 'PASS: (n) model map claudeVersion mismatch -> unavailable/MAPPING_STALE, REASON names both versions\n'
+assert_no_argv_log '(n) version-mismatch model map' "$FIXTURE_ROOT/argv-n.log"
+printf 'PASS: (n) model map claudeVersion mismatch -> unavailable/MAPPING_STALE, REASON names both versions, claude never invoked\n'
 
 # (o) model map canonical for sonnet is not a model id
 BADCANONICAL_RESULT=$FIXTURE_ROOT/result-o
 BADCANONICAL_EXIT=0
 env FAKE_LANE_MODE=available FAKE_LANE_ARGV_FILE="$FIXTURE_ROOT/argv-o.log" \
   FAKE_LANE_STDIN_FILE="$FIXTURE_ROOT/stdin-o.log" \
-  PATH="$SHIM_DIR:/usr/bin:/bin" \
+  PATH="$SHIM_DIR:/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin" \
   "$ROOT/scripts/run-claude-lane.sh" "$SPEC_FILE" sonnet "$REPO" --model-map "$BADCANONICAL_MODEL_MAP" \
   > "$BADCANONICAL_RESULT" 2>&1 || BADCANONICAL_EXIT=$?
 [ "$BADCANONICAL_EXIT" -eq 1 ] || {
@@ -412,7 +437,8 @@ env FAKE_LANE_MODE=available FAKE_LANE_ARGV_FILE="$FIXTURE_ROOT/argv-o.log" \
   exit 1
 }
 assert_report "$BADCANONICAL_RESULT" unavailable MODEL_UNRESOLVED
-printf 'PASS: (o) model map canonical is not a model id -> unavailable/MODEL_UNRESOLVED\n'
+assert_no_argv_log '(o) bad canonical model map' "$FIXTURE_ROOT/argv-o.log"
+printf 'PASS: (o) model map canonical is not a model id -> unavailable/MODEL_UNRESOLVED, claude never invoked\n'
 
 # (p) protected violation AND malformed JSON output
 run_lane p protected_violation_malformed_json
@@ -449,3 +475,84 @@ run_lane s turns_exceeded
 assert_exit '(s) turns exceeded' 2 "$LANE_EXIT"
 assert_report "$RESULT_FILE" partial TURNS_EXCEEDED
 printf 'PASS: (s) turns exceeded -> partial/TURNS_EXCEEDED, exit 2\n'
+
+# (t) --allow-path '' is a usage error, not a silently-unchecked scope
+run_lane t available --allow-path ''
+assert_exit '(t) empty --allow-path glob' 1 "$LANE_EXIT"
+assert_report "$RESULT_FILE" unavailable GUARD_FAILED
+assert_reason_contains "$RESULT_FILE" '--allow-path requires a non-empty glob'
+printf 'PASS: (t) --allow-path with an empty glob -> unavailable/GUARD_FAILED\n'
+
+# (u) worktree-delta.rb refuses a changed path containing a control character
+CTRL_ROOT=$FIXTURE_ROOT/ctrl-repo
+mkdir -p "$CTRL_ROOT"
+git -C "$CTRL_ROOT" init -q
+git -C "$CTRL_ROOT" config user.name 'Claude Lane Contract'
+git -C "$CTRL_ROOT" config user.email 'claude-lane@example.invalid'
+printf '%s\n' baseline > "$CTRL_ROOT/tracked.txt"
+git -C "$CTRL_ROOT" add tracked.txt
+git -C "$CTRL_ROOT" commit -qm baseline
+
+CTRL_STATE=$FIXTURE_ROOT/ctrl-state.json
+ruby "$ROOT/scripts/worktree-delta.rb" snapshot "$CTRL_STATE" "$CTRL_ROOT" >/dev/null
+
+CTRL_NAME=$(printf 'bad\nname.txt')
+: > "$CTRL_ROOT/$CTRL_NAME"
+
+CTRL_RESULT=$FIXTURE_ROOT/result-ctrl
+CTRL_EXIT=0
+ruby "$ROOT/scripts/worktree-delta.rb" check "$CTRL_STATE" "$CTRL_ROOT" > "$CTRL_RESULT" 2>&1 || CTRL_EXIT=$?
+[ "$CTRL_EXIT" -eq 2 ] || {
+  printf 'FAIL: (u) worktree-delta.rb on a control-character path exited %s, expected 2\n' "$CTRL_EXIT" >&2
+  cat "$CTRL_RESULT" >&2
+  exit 1
+}
+grep -F 'contains a control character' "$CTRL_RESULT" >/dev/null || {
+  printf 'FAIL: (u) expected a control-character error in %s\n' "$CTRL_RESULT" >&2
+  cat "$CTRL_RESULT" >&2
+  exit 1
+}
+printf 'PASS: (u) worktree-delta.rb refuses a changed path with an embedded control character\n'
+
+# (v) permission_denials present but not an array (a string)
+run_lane v malformed_denials_string
+assert_exit '(v) malformed permission_denials (string)' 1 "$LANE_EXIT"
+assert_report "$RESULT_FILE" unavailable OUTPUT_NOT_CAPTURED
+printf 'PASS: (v) permission_denials is a string, not an array -> unavailable/OUTPUT_NOT_CAPTURED\n'
+
+# (w) claude exits 0 but stdout is not JSON
+run_lane w non_json_clean_exit
+assert_exit '(w) non-JSON stdout, clean exit' 1 "$LANE_EXIT"
+assert_report "$RESULT_FILE" unavailable OUTPUT_NOT_CAPTURED
+printf 'PASS: (w) claude exit 0 with non-JSON stdout -> unavailable/OUTPUT_NOT_CAPTURED\n'
+
+# (x) parse-lane-result.rb: worktree-delta exit 0 (changed) but zero parsed
+# CHANGE: lines is format drift, not an empty delta -> GUARD_FAILED, not a
+# vacuous SCOPE: ok next to WORKTREE_DELTA: changed.
+X_JSON=$FIXTURE_ROOT/x-result.json
+printf '%s\n' '{"modelUsage":{"claude-sonnet-5":{}},"permission_denials":[],"is_error":false,"result":"done"}' > "$X_JSON"
+X_ERROR=$FIXTURE_ROOT/x-error.log
+X_GUARD_ERROR=$FIXTURE_ROOT/x-guard-error.log
+X_DELTA_STDOUT=$FIXTURE_ROOT/x-delta-stdout.log
+: > "$X_ERROR"
+: > "$X_GUARD_ERROR"
+: > "$X_DELTA_STDOUT"
+X_RESULT=$FIXTURE_ROOT/result-x
+X_EXIT=0
+ruby "$ROOT/scripts/parse-lane-result.rb" "$X_JSON" claude-sonnet-5 sonnet 0 0 0 \
+  "$X_ERROR" "$X_GUARD_ERROR" "$X_DELTA_STDOUT" > "$X_RESULT" 2>&1 || X_EXIT=$?
+[ "$X_EXIT" -eq 1 ] || {
+  printf 'FAIL: (x) parse-lane-result.rb with delta_exit=0 and no CHANGE lines exited %s, expected 1\n' "$X_EXIT" >&2
+  cat "$X_RESULT" >&2
+  exit 1
+}
+assert_report "$X_RESULT" unavailable GUARD_FAILED
+assert_reason_contains "$X_RESULT" 'worktree-delta reported a change but no CHANGE: lines were parsed'
+printf 'PASS: (x) worktree-delta exit 0 with zero parsed CHANGE lines -> unavailable/GUARD_FAILED\n'
+
+# (y) REASON collapses a multi-line stderr excerpt to a single line
+run_lane y transport_boom_multiline
+assert_exit '(y) multi-line stderr excerpt' 1 "$LANE_EXIT"
+assert_report "$RESULT_FILE" unavailable TRANSPORT_FAILED
+assert_reason_contains "$RESULT_FILE" 'boom line one boom line two'
+printf 'PASS: (y) multi-line stderr excerpt collapses to a single REASON line\n'

@@ -39,7 +39,7 @@ unavailable() {
     'BOUNDARY_EVENTS: 0 denial(s): none' \
     'PROTECTED_STATE: error' \
     'WORKTREE_DELTA: error' \
-    'SCOPE: unchecked (no --allow-path given)' \
+    'SCOPE: unchecked (lane did not run)' \
     'MODEL_SAID:' \
     ''
   exit 1
@@ -68,7 +68,9 @@ while [ $# -gt 0 ]; do
     --max-budget-usd) MAX_BUDGET_USD=${2-}; shift 2 ;;
     --allow-bash) ALLOW_BASH_LIST="$ALLOW_BASH_LIST
 ${2-}"; shift 2 ;;
-    --allow-path) ALLOW_PATH_LIST="$ALLOW_PATH_LIST
+    --allow-path)
+      [ -n "${2-}" ] || unavailable GUARD_FAILED '--allow-path requires a non-empty glob'
+      ALLOW_PATH_LIST="$ALLOW_PATH_LIST
 ${2-}"; shift 2 ;;
     --model-map) MODEL_MAP_PATH=${2-}; shift 2 ;;
     *) unavailable GUARD_FAILED "unknown argument: $1" ;;
@@ -269,7 +271,7 @@ if [ -n "$ALLOW_BASH_LIST" ]; then
   IFS=$OLD_IFS
 fi
 
-set -- -p --restricted --strict-mcp-config \
+set -- -p --restricted --strict-mcp-config --setting-sources "" \
   --tools "Read,Edit,Write,Grep,Glob,Bash" \
   --allowedTools "$ALLOWED_TOOLS" \
   --permission-mode acceptEdits --permission-prompts none \
