@@ -359,3 +359,104 @@ working as designed, and it is recorded rather than retried away.
 | sandbox excludes `/tmp` and `$TMPDIR` (live) | PASS |
 | reviewer real verdict capture | PASS |
 | human Production boundary unchanged | PASS |
+
+## Contract correction round three — 2026-09-04
+
+The final contract correction before merge. Architecture, model mapping,
+routing, dogfood, the protected-state guard, package identity, and the human
+authority boundary were frozen; no model, agent, workflow mode, runtime,
+dashboard, CI framework, or sandbox framework was added. Codex invocation and
+runtime contracts were untouched, so Luna, Terra, and Sol were not re-invoked.
+
+### 1. Evidence gate semantics
+
+`EVIDENCE_FIRST_SPEC` governs two kinds of work, and previously gave both the
+same exit condition. The exit condition is now the abstraction:
+
+```text
+incident / defect / debugging
+  evidence -> ROOT_CAUSE_CONFIRMED -> EVIDENCE_GATE_SATISFIED -> IMPLEMENTATION_SPEC
+
+proactive high-risk change
+  evidence / architecture / invariants / safety case
+                           -> EVIDENCE_GATE_SATISFIED -> IMPLEMENTATION_SPEC
+```
+
+For reactive work `ROOT_CAUSE_CONFIRMED` remains a necessary condition, with an
+explicit bounded risk acceptance as the only exception. For proactive high-risk
+change there is no defect and no root cause to invent; the gate rests on
+`OBSERVED_EVIDENCE`, `INVARIANTS`, `AUTHORITY_BOUNDARIES`, `FORBIDDEN_ACTIONS`,
+`EVIDENCE_REQUIRED_BEFORE_WRITE`, and `STOP_CONDITIONS` being established well
+enough to carry the change. The evidence requirement was not weakened: the
+proactive path may not excuse a reactive task from a root cause it owes.
+
+`tests/evidence-gate-contract.sh` makes this deterministic across ten normative
+files. It requires the gate on every surface that describes the evidence-first
+exit, requires both paths to be documented and the fabricated-root-cause
+prohibition to be present, requires `IMPLEMENTATION_SPEC` to gate on
+`EVIDENCE_GATE_SATISFIED` rather than `ROOT_CAUSE_CONFIRMED`, and fails on any
+sentence making a universal `ROOT_CAUSE_CONFIRMED` claim, any paragraph
+asserting it without reactive scope, and the four retired wordings. Both
+regression shapes were probed live and both failed the check as intended:
+reinstating `ROOT_CAUSE_CONFIRMED` as the unconditional precondition, and adding
+"Every evidence-first task requires `ROOT_CAUSE_CONFIRMED`".
+
+### 2. Reviewer fenced-code verdict
+
+The standalone-verdict rule already rejected prose, blockquotes, emphasis, and
+multi-value template lines, but a verdict inside a fenced block was still
+consumed — and a real reviewer reply had in fact fenced its entire report.
+
+The parser now tracks ``` and ~~~ fence state line-by-line, with no third-party
+Markdown library. Everything inside a fence is discarded before matching, an
+unterminated fence swallows the remainder and fails closed, and a real verdict
+must match `^VERDICT:` at the start of an unindented line, which also rejects
+blockquoted and indented-code verdicts. The `modelUsage` and permission-denial
+gates are unchanged.
+
+`agents/fable-advisor.md` was corrected in the same pass so the contract is
+satisfiable: the verdict line was removed from the fenced header template, and
+the reviewer must now end its reply with the verdict on its own final line,
+unindented and outside every fence.
+
+Reviewer contract cases went from 17 to 24:
+
+| Case | Result |
+|---|---|
+| one real `VERDICT: ACCEPT` | `AVAILABLE`, `PARSED_VERDICT: ACCEPT` |
+| one real `VERDICT: FIX_FIRST` | `AVAILABLE`, `PARSED_VERDICT: FIX_FIRST` |
+| one real `VERDICT: RETHINK` | `AVAILABLE`, `PARSED_VERDICT: RETHINK` |
+| fenced ACCEPT plus a real FIX_FIRST | `AVAILABLE`, `PARSED_VERDICT: FIX_FIRST` |
+| fenced ACCEPT only (backticks) | `UNAVAILABLE` / `OUTPUT_NOT_CAPTURED` |
+| fenced ACCEPT only (tildes) | `UNAVAILABLE` / `OUTPUT_NOT_CAPTURED` |
+| unterminated fence containing ACCEPT | `UNAVAILABLE` / `OUTPUT_NOT_CAPTURED` |
+| indented ACCEPT | `UNAVAILABLE` / `OUTPUT_NOT_CAPTURED` |
+| indented ACCEPT as the first line | `UNAVAILABLE` / `OUTPUT_NOT_CAPTURED` |
+| blockquoted ACCEPT | `UNAVAILABLE` / `OUTPUT_NOT_CAPTURED` |
+| duplicate real verdicts | `UNAVAILABLE` / `VERDICT_AMBIGUOUS` |
+| conflicting real verdicts | `UNAVAILABLE` / `VERDICT_AMBIGUOUS` |
+
+The remaining twelve cases (no verdict, inline/emphasized/template mentions,
+agent, model, multi-model, transport, non-JSON, JSON null, null `modelUsage`,
+null `permission_denials`, missing fields, permission denial) are unchanged.
+
+### Validation
+
+| Gate | Result |
+|---|---|
+| `./scripts/validate-contracts.sh` | PASS |
+| `claude plugin validate --strict .` | PASS |
+| reviewer contract, 24 cases | PASS |
+| evidence/implementation semantic contract, 10 files | PASS |
+| protected local-state contract, 17 cases | PASS |
+| worktree delta contract | PASS |
+| bash/zsh timeout argv contract | PASS |
+| `git diff --check` | PASS |
+| real Fable clean-context reviewer smoke | `AVAILABLE`, `claude-fable-5-1`, `PARSED_VERDICT: ACCEPT` |
+
+The live smoke is the load-bearing check for this round: the real agent emitted
+a fenced `REVIEW REPORT` header and an unfenced `VERDICT: ACCEPT`, and the
+stricter parser consumed it.
+
+Luna, Terra, and Sol were not re-invoked. This round changed no Codex invocation
+argument, no runtime contract, and no lane guard.

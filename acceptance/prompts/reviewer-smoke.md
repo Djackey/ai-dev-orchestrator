@@ -25,4 +25,6 @@ Check only:
 7. no Production authority was introduced.
 
 Return the exact reviewer schema, including `VERDICT: ACCEPT`, `FIX_FIRST`, or
-`RETHINK`. Cite concrete files. Do not modify anything.
+`RETHINK`. Put that verdict on its own final line, starting at the beginning of
+the line and outside every fenced code block. Cite concrete files. Do not modify
+anything.

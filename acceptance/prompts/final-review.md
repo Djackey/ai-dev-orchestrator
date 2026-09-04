@@ -35,5 +35,7 @@ Judge only whether the current V1 is ready for a Draft PR. Attack these points:
     `node_modules`, and cannot be relaxed by the implementer.
 
 Use the acceptance evidence as a record, not as a substitute for reading the
-implementation. Do not edit. Return the exact REVIEW REPORT schema with
-`VERDICT: ACCEPT`, `FIX_FIRST`, or `RETHINK`, naming any blocker precisely.
+implementation. Do not edit. Return the exact REVIEW REPORT schema, naming any
+blocker precisely, and end with `VERDICT: ACCEPT`, `VERDICT: FIX_FIRST`, or
+`VERDICT: RETHINK` on its own final line, starting at the beginning of the line
+and outside every fenced code block.

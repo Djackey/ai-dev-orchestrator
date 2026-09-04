@@ -21,7 +21,28 @@ case "${FAKE_REVIEW_MODE-available}" in
     printf '%s\n' '{"modelUsage":{"claude-fable-5-1":{}},"permission_denials":[],"result":"REVIEW REPORT\nBlocker: the guard is missing.\nVERDICT: FIX_FIRST"}'
     ;;
   rethink)
-    printf '%s\n' '{"modelUsage":{"claude-fable-5-1":{}},"permission_denials":[],"result":"REVIEW REPORT\nThe approach is wrong.\n   VERDICT: RETHINK   "}'
+    printf '%s\n' '{"modelUsage":{"claude-fable-5-1":{}},"permission_denials":[],"result":"REVIEW REPORT\nThe approach is wrong.\nVERDICT: RETHINK   "}'
+    ;;
+  fenced_only)
+    printf '%s\n' '{"modelUsage":{"claude-fable-5-1":{}},"permission_denials":[],"result":"REVIEW REPORT\n```text\nREVIEW REPORT\nVERDICT: ACCEPT\n```\nThat block is the schema, not my judgement."}'
+    ;;
+  tilde_fenced_only)
+    printf '%s\n' '{"modelUsage":{"claude-fable-5-1":{}},"permission_denials":[],"result":"REVIEW REPORT\n~~~\nVERDICT: ACCEPT\n~~~"}'
+    ;;
+  unterminated_fence)
+    printf '%s\n' '{"modelUsage":{"claude-fable-5-1":{}},"permission_denials":[],"result":"REVIEW REPORT\n```text\nVERDICT: ACCEPT"}'
+    ;;
+  fenced_plus_real)
+    printf '%s\n' '{"modelUsage":{"claude-fable-5-1":{}},"permission_denials":[],"result":"REVIEW REPORT\n```text\nVERDICT: ACCEPT\n```\nThe template above is not my verdict.\nVERDICT: FIX_FIRST"}'
+    ;;
+  indented_verdict)
+    printf '%s\n' '{"modelUsage":{"claude-fable-5-1":{}},"permission_denials":[],"result":"REVIEW REPORT\n    VERDICT: ACCEPT"}'
+    ;;
+  leading_indented_verdict)
+    printf '%s\n' '{"modelUsage":{"claude-fable-5-1":{}},"permission_denials":[],"result":"    VERDICT: ACCEPT"}'
+    ;;
+  blockquote_verdict)
+    printf '%s\n' '{"modelUsage":{"claude-fable-5-1":{}},"permission_denials":[],"result":"REVIEW REPORT\n> VERDICT: ACCEPT"}'
     ;;
   no_verdict)
     printf '%s\n' '{"modelUsage":{"claude-fable-5-1":{}},"permission_denials":[],"result":"REVIEW REPORT\nEverything looks fine to me."}'
@@ -101,6 +122,13 @@ run_unavailable() {
 run_verdict available ACCEPT
 run_verdict fix_first FIX_FIRST
 run_verdict rethink RETHINK
+run_verdict fenced_plus_real FIX_FIRST
+run_unavailable fenced_only OUTPUT_NOT_CAPTURED
+run_unavailable tilde_fenced_only OUTPUT_NOT_CAPTURED
+run_unavailable unterminated_fence OUTPUT_NOT_CAPTURED
+run_unavailable indented_verdict OUTPUT_NOT_CAPTURED
+run_unavailable leading_indented_verdict OUTPUT_NOT_CAPTURED
+run_unavailable blockquote_verdict OUTPUT_NOT_CAPTURED
 run_unavailable no_verdict OUTPUT_NOT_CAPTURED
 run_unavailable quoted_verdict OUTPUT_NOT_CAPTURED
 run_unavailable duplicate_verdict VERDICT_AMBIGUOUS

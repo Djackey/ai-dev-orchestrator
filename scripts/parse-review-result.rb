@@ -5,10 +5,40 @@ require "json"
 
 VERDICTS = %w[ACCEPT FIX_FIRST RETHINK].freeze
 
-# A verdict is only consumable when it stands alone on its own line. Prose,
-# blockquotes, inline code, emphasis, and schema templates such as
+# A verdict is only consumable when it stands alone, unindented, at the start of
+# its own line, outside every fenced code block. Prose, blockquotes (`> `),
+# indented code blocks, inline code, emphasis, and schema templates such as
 # "VERDICT: ACCEPT | FIX_FIRST | RETHINK" deliberately do not match.
-VERDICT_LINE = /\A[[:space:]]*VERDICT:[[:blank:]]*(#{VERDICTS.join('|')})[[:space:]]*\z/.freeze
+VERDICT_LINE = /\AVERDICT:[[:blank:]]*(#{VERDICTS.join('|')})[[:space:]]*\z/.freeze
+
+# Fenced blocks open with three or more backticks or tildes, indented at most
+# three spaces, optionally followed by an info string. They close on a line of
+# at least as many of the same character and nothing else. An unterminated fence
+# swallows the rest of the reply, which fails closed.
+FENCE_OPEN = /\A {0,3}((?:`{3,})|(?:~{3,}))/.freeze
+
+def outside_fenced_blocks(text)
+  fence_char = nil
+  fence_length = 0
+
+  text.lines.reject do |line|
+    if fence_char
+      candidate = line.sub(/\A {0,3}/, "").rstrip
+      if candidate.length >= fence_length && !candidate.empty? && candidate.chars.uniq == [fence_char]
+        fence_char = nil
+        fence_length = 0
+      end
+      true
+    elsif (opener = FENCE_OPEN.match(line))
+      marker = opener[1]
+      fence_char = marker[0]
+      fence_length = marker.length
+      true
+    else
+      false
+    end
+  end
+end
 
 def unavailable(classification, reason)
   puts "REVIEWER CAPABILITY REPORT"
@@ -19,12 +49,13 @@ def unavailable(classification, reason)
 end
 
 def extract_verdict(result)
-  matches = result.lines.map { |line| VERDICT_LINE.match(line) }.compact.map { |match| match[1] }
+  candidates = outside_fenced_blocks(result)
+  matches = candidates.map { |line| VERDICT_LINE.match(line) }.compact.map { |match| match[1] }
 
   if matches.empty?
     unavailable(
       "OUTPUT_NOT_CAPTURED",
-      "reviewer result contained no standalone `VERDICT: #{VERDICTS.join(' | ')}` line"
+      "reviewer result contained no unfenced, unindented `VERDICT: #{VERDICTS.join(' | ')}` line at the start of a line"
     )
   end
 
@@ -59,8 +90,10 @@ begin
     unavailable("MODEL_UNRESOLVED", "modelUsage did not uniquely prove the fable alias: #{models.join(', ')}")
   end
 
-  result = payload["result"].to_s.strip
-  unavailable("OUTPUT_NOT_CAPTURED", "captured JSON contained no reviewer result") if result.empty?
+  # Parse the raw result: stripping first would promote an indented verdict on
+  # the first line to column zero.
+  result = payload["result"].to_s
+  unavailable("OUTPUT_NOT_CAPTURED", "captured JSON contained no reviewer result") if result.strip.empty?
   verdict = extract_verdict(result)
 
   puts "REVIEWER CAPABILITY REPORT"
@@ -71,7 +104,7 @@ begin
   puts "RESOLVED_MODEL: #{models.join(', ')}"
   puts "TRANSPORT: captured-json"
   puts "PARSED_VERDICT: #{verdict}"
-  puts result
+  puts result.strip
 rescue JSON::ParserError => e
   unavailable("OUTPUT_NOT_CAPTURED", "invalid JSON: #{e.message}")
 rescue KeyError, Errno::ENOENT, NoMethodError, TypeError => e

@@ -41,7 +41,8 @@ for file in \
   tests/codex-resolution-contract.sh \
   tests/reviewer-contract.sh \
   tests/worktree-delta-contract.sh \
-  tests/protected-paths-contract.sh; do
+  tests/protected-paths-contract.sh \
+  tests/evidence-gate-contract.sh; do
   require_file "$file"
 done
 
@@ -126,25 +127,35 @@ for file in agents/codex-implementer.md agents/terra-implementer.md agents/sol-i
   require_text "$file" 'sandbox_workspace_write.exclude_slash_tmp=true'
   require_text "$file" 'workspace-write [workdir]'
 done
-require_text agents/fable-advisor.md 'alone on its own line, exactly once'
 printf 'PASS: guard baselines are outside the sandbox writable set\n'
 
 require_text scripts/parse-review-result.rb 'VERDICT_AMBIGUOUS'
 require_text scripts/parse-review-result.rb 'PARSED_VERDICT'
 require_text scripts/parse-review-result.rb 'VERDICT_LINE'
+require_text scripts/parse-review-result.rb 'FENCE_OPEN'
+require_text scripts/parse-review-result.rb 'outside_fenced_blocks'
 require_text scripts/run-clean-context-review.sh '--agent ai-dev-orchestrator:fable-advisor'
 require_text scripts/parse-review-result.rb 'REQUESTED_AGENT: ai-dev-orchestrator:fable-advisor'
 if rg --quiet 'result\.match\?\(/VERDICT' scripts/parse-review-result.rb; then
   fail 'reviewer parser still accepts a substring verdict'
 fi
-printf 'PASS: reviewer verdict parser is line-anchored and fails closed\n'
+if rg --quiet 'VERDICT_LINE = /\\A\[\[:space:\]\]' scripts/parse-review-result.rb; then
+  fail 'reviewer verdict regex still tolerates leading whitespace'
+fi
+require_text agents/fable-advisor.md 'outside every fenced code block'
+require_text agents/fable-advisor.md 'End the reply with the verdict as its own final line'
+printf 'PASS: reviewer verdict parser ignores fenced, indented, and quoted lines\n'
+
+./tests/evidence-gate-contract.sh
+require_text contracts/EVIDENCE_FIRST_SPEC.md '## Exit condition: EVIDENCE_GATE_SATISFIED'
+require_text skills/orchestration/SKILL.md '### The evidence gate'
 
 require_text contracts/IMPLEMENTATION_SPEC.md 'Use once the implementation direction is sufficiently determined.'
 require_text contracts/IMPLEMENTATION_SPEC.md 'There is no root cause to confirm when there is no defect to'
-require_text contracts/IMPLEMENTATION_SPEC.md 'That threshold is not relaxed here.'
-require_text contracts/EVIDENCE_FIRST_SPEC.md 'not a universal precondition for every implementation'
-require_text skills/orchestration/SKILL.md 'This threshold belongs to evidence-first work.'
-require_text README.md 'Not every implementation'
+require_text contracts/IMPLEMENTATION_SPEC.md 'That gate is not relaxed here.'
+require_text contracts/EVIDENCE_FIRST_SPEC.md 'not a universal precondition for'
+require_text skills/orchestration/SKILL.md 'The gate belongs to evidence-first work.'
+require_text README.md 'every implementation requires `ROOT_CAUSE_CONFIRMED`'
 if rg --quiet 'Use only after the root cause' contracts README.md skills agents; then
   fail 'IMPLEMENTATION_SPEC still requires a root cause for every implementation'
 fi
@@ -185,6 +196,7 @@ printf 'PASS: human authority boundary and no automatic Production path\n'
 ./tests/reviewer-contract.sh
 ./tests/worktree-delta-contract.sh
 ./tests/protected-paths-contract.sh
+./tests/evidence-gate-contract.sh
 
 git diff --check
 printf 'PASS: git diff --check\n'

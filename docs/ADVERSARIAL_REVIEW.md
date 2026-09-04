@@ -143,3 +143,41 @@ the protected inventory so the guard stays a short list rather than a tree scan.
 `.git/hooks` is therefore a blind spot shared with the worktree content baseline,
 and the Codex sandbox remains its only boundary. Closing it needs a separate,
 deliberately scoped change rather than widening this guard.
+
+## Contract correction round three — 2026-09-04
+
+The last contract correction before merge. Two findings, no new roles, models,
+workflow modes, runtimes, or frameworks.
+
+18. **Did the evidence gate demand a root cause that cannot exist?** It did.
+    `EVIDENCE_FIRST_SPEC` covers two different kinds of work — reactive
+    incidents, defects, and debugging, and proactive high-risk change in
+    billing, auth, security, concurrency, migrations, distributed state,
+    storage, and release infrastructure — but a single exit condition,
+    `ROOT_CAUSE_CONFIRMED`, was written for both. A new migration or auth
+    feature has no defect, so the contract was asking for a fabricated root
+    cause or an unnecessary risk acceptance. Fixed by naming the abstraction:
+    the exit condition is now `EVIDENCE_GATE_SATISFIED`, reached through
+    `ROOT_CAUSE_CONFIRMED` for reactive work (or an explicit bounded risk
+    acceptance) and through sufficient `OBSERVED_EVIDENCE`, `INVARIANTS`,
+    `AUTHORITY_BOUNDARIES`, `FORBIDDEN_ACTIONS`,
+    `EVIDENCE_REQUIRED_BEFORE_WRITE`, and `STOP_CONDITIONS` for proactive
+    work. The evidence requirement itself is not relaxed in either direction:
+    the proactive path may not be used to excuse a reactive task from a root
+    cause it owes. `tests/evidence-gate-contract.sh` enforces the semantics
+    across ten normative files and fails on a universal or unscoped
+    `ROOT_CAUSE_CONFIRMED` claim, on the retired wording, and on
+    `IMPLEMENTATION_SPEC` gating on the reactive path instead of the gate.
+19. **Could a fenced verdict still be consumed?** It could, and it had been:
+    an earlier real reviewer reply put its whole report — verdict included —
+    inside a ```text block, and the parser accepted it. A schema template, a
+    quoted example, or an illustrative block would therefore have been read as
+    a real verdict. Fixed: the parser now tracks ``` and ~~~ fence state
+    line-by-line with no third-party library, ignores everything inside a fence
+    (an unterminated fence swallows the rest, which fails closed), and requires
+    `^VERDICT:` at the start of an unindented line. Blockquoted and indented
+    verdicts are rejected by the same anchor. `agents/fable-advisor.md` was
+    corrected in the same pass: its header template no longer contains the
+    verdict line, and the reviewer must end its reply with the verdict outside
+    every fence. A real smoke run confirmed the live agent now emits a fenced
+    header and an unfenced `VERDICT: ACCEPT`.

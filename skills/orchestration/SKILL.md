@@ -81,9 +81,10 @@ implementation model merely because it is available.
 
 ## Evidence before implementation
 
-Use `${CLAUDE_PLUGIN_ROOT}/contracts/EVIDENCE_FIRST_SPEC.md` for Production incidents, hard debugging,
-billing, auth, security, concurrency, migration, distributed state, storage, or
-release infrastructure whenever root cause is not already proven.
+Use `${CLAUDE_PLUGIN_ROOT}/contracts/EVIDENCE_FIRST_SPEC.md` for two kinds of
+work: reactive Production incidents and hard debugging whose root cause is not
+already proven, and proactive high-risk change in billing, auth, security,
+concurrency, migration, distributed state, storage, or release infrastructure.
 
 The evidence phase names no implementation files. Route it to
 `evidence-explorer`, which runs Terra in `read-only` sandbox and returns:
@@ -99,16 +100,35 @@ Do not preselect its file for editing. Luna may do bounded, read-only scouting
 such as finding call sites or history, but Terra or the architect synthesizes
 the evidence.
 
-Within an evidence-first task, only after the architect records
-`ROOT_CAUSE_CONFIRMED` may it normally issue an `IMPLEMENTATION_SPEC`.
-Exceptional risk acceptance must be explicit, explain what remains unresolved,
-and remain inside the human authority boundary.
+### The evidence gate
 
-This threshold belongs to evidence-first work. It is not a universal
-precondition: ordinary feature, refactor, and change work has no defect to
-explain, and requires only that the implementation direction is sufficiently
-determined. Do not manufacture a root cause for greenfield work, and do not
-treat the absence of one as a reason to withhold an `IMPLEMENTATION_SPEC`.
+An evidence-first task may issue an `IMPLEMENTATION_SPEC` only after the
+architect explicitly records `EVIDENCE_GATE_SATISFIED`. Two paths reach it, and
+they are not interchangeable:
+
+```text
+incident / defect / debugging
+  evidence -> ROOT_CAUSE_CONFIRMED -> EVIDENCE_GATE_SATISFIED -> IMPLEMENTATION_SPEC
+
+proactive high-risk change
+  evidence / architecture / invariants / safety case
+                           -> EVIDENCE_GATE_SATISFIED -> IMPLEMENTATION_SPEC
+```
+
+For reactive work, `ROOT_CAUSE_CONFIRMED` is a necessary condition for the gate.
+Exceptional risk acceptance must be explicit and bounded, explain what remains
+unresolved, and remain inside the human authority boundary.
+
+For proactive high-risk change there is no defect and therefore no root cause;
+never invent one, and never withhold the gate because none exists. The gate
+instead requires that `OBSERVED_EVIDENCE`, `INVARIANTS`, `AUTHORITY_BOUNDARIES`,
+`FORBIDDEN_ACTIONS`, `EVIDENCE_REQUIRED_BEFORE_WRITE`, and `STOP_CONDITIONS` are
+each established well enough to carry the change. Equally, do not let the
+proactive path excuse a reactive task from a root cause it actually owes.
+
+The gate belongs to evidence-first work. It is not a universal precondition:
+ordinary feature, refactor, and change work requires only that the
+implementation direction is sufficiently determined.
 
 ## Spec contracts
 
@@ -116,7 +136,7 @@ treat the absence of one as a reason to withhold an `IMPLEMENTATION_SPEC`.
 
 Use `${CLAUDE_PLUGIN_ROOT}/contracts/IMPLEMENTATION_SPEC.md` once the
 implementation direction is sufficiently determined — and, for evidence-first
-tasks only, once that contract's root-cause threshold is also met:
+tasks only, once `EVIDENCE_GATE_SATISFIED` is also recorded:
 
 ```text
 OBJECTIVE
@@ -135,7 +155,8 @@ requirements.
 
 ### EVIDENCE_FIRST_SPEC
 
-Use `${CLAUDE_PLUGIN_ROOT}/contracts/EVIDENCE_FIRST_SPEC.md` while cause is uncertain:
+Use `${CLAUDE_PLUGIN_ROOT}/contracts/EVIDENCE_FIRST_SPEC.md` while cause is
+uncertain, or before a proactive high-risk change:
 
 ```text
 GOAL

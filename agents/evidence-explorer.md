@@ -93,5 +93,12 @@ NEXT_EVIDENCE:
 <the single next item most likely to change the verdict>
 ```
 
-Only `CONFIRMED` evidence lets the architect record `ROOT_CAUSE_CONFIRMED`.
-`SUPPORTED_HYPOTHESIS` is not a disguised implementation authorization.
+For an incident, defect, or debugging task, only `CONFIRMED` evidence lets the
+architect record `ROOT_CAUSE_CONFIRMED`. `SUPPORTED_HYPOTHESIS` is not a
+disguised implementation authorization.
+
+For proactive high-risk change there is no defect and therefore no root cause to
+confirm: report `ROOT_CAUSE_CONFIDENCE: UNRESOLVED`, state plainly that no defect
+was under investigation, and return the evidence, invariants, and residual
+unknowns instead. Do not invent a root cause to fill the field. The architect,
+not this lane, records `EVIDENCE_GATE_SATISFIED`.

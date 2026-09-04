@@ -89,10 +89,12 @@ There is no automatic "one failure means stronger model" rule.
 
 ## Evidence first
 
-Production incidents, hard debugging, billing, auth, security, concurrency,
-migrations, distributed state, storage, and release infrastructure normally
-start with [`EVIDENCE_FIRST_SPEC`](contracts/EVIDENCE_FIRST_SPEC.md). The
-`evidence-explorer` runs Terra under Codex `read-only` sandbox and separates:
+Two kinds of work start with
+[`EVIDENCE_FIRST_SPEC`](contracts/EVIDENCE_FIRST_SPEC.md): reactive Production
+incidents and hard debugging whose root cause is unproven, and proactive
+high-risk change in billing, auth, security, concurrency, migrations,
+distributed state, storage, and release infrastructure. The `evidence-explorer`
+runs Terra under Codex `read-only` sandbox and separates:
 
 - direct `OBSERVED` evidence;
 - `INFERRED` conclusions;
@@ -100,16 +102,28 @@ start with [`EVIDENCE_FIRST_SPEC`](contracts/EVIDENCE_FIRST_SPEC.md). The
 - root-cause confidence; and
 - the next evidence most likely to change the verdict.
 
-The evidence spec deliberately contains no implementation file list. Inside an
-evidence-first task, only after the architect records `ROOT_CAUSE_CONFIRMED`—or
-explicitly accepts a bounded exceptional risk—does it create an
-[`IMPLEMENTATION_SPEC`](contracts/IMPLEMENTATION_SPEC.md).
+The evidence spec deliberately contains no implementation file list. An
+evidence-first task creates an
+[`IMPLEMENTATION_SPEC`](contracts/IMPLEMENTATION_SPEC.md) only after the
+architect records `EVIDENCE_GATE_SATISFIED`, and two paths reach that gate:
 
-That threshold is scoped to evidence-first work. Ordinary feature, refactor, and
-change work has no defect to explain: an
-[`IMPLEMENTATION_SPEC`](contracts/IMPLEMENTATION_SPEC.md) needs only a
-sufficiently determined implementation direction. Not every implementation
-requires `ROOT_CAUSE_CONFIRMED`.
+```text
+incident / defect / debugging
+  evidence -> ROOT_CAUSE_CONFIRMED -> EVIDENCE_GATE_SATISFIED -> IMPLEMENTATION_SPEC
+
+proactive high-risk change
+  evidence / architecture / invariants / safety case
+                           -> EVIDENCE_GATE_SATISFIED -> IMPLEMENTATION_SPEC
+```
+
+A defect owes a root cause, or an explicit bounded risk acceptance. A new
+migration, auth, billing, or concurrency feature has no defect to explain, so it
+owes evidence, invariants, authority boundaries, forbidden actions, a write
+threshold, and stop conditions instead — never a fabricated root cause.
+
+The gate is scoped to evidence-first work. Ordinary feature, refactor, and
+change work needs only a sufficiently determined implementation direction. Not
+every implementation requires `ROOT_CAUSE_CONFIRMED`.
 
 ## Workflow modes
 
