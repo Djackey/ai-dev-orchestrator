@@ -13,10 +13,33 @@ ships. Human authorization owns Production.
 <a href="https://github.com/DannyMac180/fable-advisor/raw/main/assets/fable-advisor-demo.mp4"><img src="assets/fable-advisor-demo-poster.png" alt="Fable advisor orchestration demo" width="100%"></a>
 
 This is an additive evolution of
-[fable-advisor](https://github.com/DannyMac180/fable-advisor). It preserves the
-lightweight Claude Code plugin + agents + orchestration skill architecture. V1
-is policy, prompts, and contracts for long-lived software development—not a new
-agent platform.
+[fable-advisor](https://github.com/DannyMac180/fable-advisor) by Dan McAteer. It
+preserves the lightweight Claude Code plugin + agents + orchestration skill
+architecture. V1 is policy, prompts, and contracts for long-lived software
+development—not a new agent platform.
+
+## Attribution and package identity
+
+Upstream `fable-advisor` is the origin of this work. Its MIT
+[`LICENSE`](LICENSE) and copyright are preserved unchanged, the original agent
+filenames and skill layout are kept for low-conflict syncing, and the demo asset
+above is upstream's.
+
+This fork ships under its own package identity so it can never collide with
+upstream installs, updates, or future releases:
+
+| | Upstream | This fork |
+|---|---|---|
+| Plugin name | `fable-advisor` | `ai-dev-orchestrator` |
+| Marketplace name | `fable-advisor` | `ai-dev-orchestrator` |
+| Owner / author | Dan McAteer | Djackey |
+| Homepage | `DannyMac180/fable-advisor` | `Djackey/ai-dev-orchestrator` |
+| Version line | 5.x | starts at `0.1.0` |
+
+Fork versions are independent and deliberately restart at `0.1.0`; they are not
+a continuation of upstream's 5.x series and carry no compatibility claim about
+it. The `fable-advisor` name survives only as the *agent* filename for the
+clean-context reviewer role, which keeps upstream merges small.
 
 ## Architecture
 
@@ -77,10 +100,16 @@ start with [`EVIDENCE_FIRST_SPEC`](contracts/EVIDENCE_FIRST_SPEC.md). The
 - root-cause confidence; and
 - the next evidence most likely to change the verdict.
 
-The evidence spec deliberately contains no implementation file list. Only after
-the architect records `ROOT_CAUSE_CONFIRMED`—or explicitly accepts a bounded
-exceptional risk—does it create an
+The evidence spec deliberately contains no implementation file list. Inside an
+evidence-first task, only after the architect records `ROOT_CAUSE_CONFIRMED`—or
+explicitly accepts a bounded exceptional risk—does it create an
 [`IMPLEMENTATION_SPEC`](contracts/IMPLEMENTATION_SPEC.md).
+
+That threshold is scoped to evidence-first work. Ordinary feature, refactor, and
+change work has no defect to explain: an
+[`IMPLEMENTATION_SPEC`](contracts/IMPLEMENTATION_SPEC.md) needs only a
+sufficiently determined implementation direction. Not every implementation
+requires `ROOT_CAUSE_CONFIRMED`.
 
 ## Workflow modes
 
@@ -101,16 +130,37 @@ All Codex-backed implementers use the shared
 
 - explicit model and per-task effort, with observable runtime resolution;
 - no silent fallback or effort rounding;
-- `workspace-write` sandbox;
+- `workspace-write` sandbox narrowed to the workdir, so `/tmp` and `$TMPDIR`
+  stay outside it and guard baselines cannot be rewritten by the model;
 - portable bash/zsh timeout construction, with no uncapped retry;
 - unique prompt/transcript/final files;
 - actual task-delta inspection and an empty-diff refusal guard;
+- a protected local-state guard over sensitive ignored paths;
 - independent verification re-run; and
 - structured reports.
 
 Reports are claims, not evidence. The orchestrator inspects the diff and runs
 verification itself. The evidence lane applies the same resolution discipline
 with `read-only` sandbox and a pre/post workspace-mutation check.
+
+### Protected local state
+
+The worktree content baseline covers tracked and nonignored untracked files, and
+deliberately does not scan the ignored tree or `node_modules`. A short explicit
+list is guarded separately by
+[`scripts/protected-paths.rb`](scripts/protected-paths.rb): `.env`, `.env.*`,
+`.claude/settings.local.json`, `.codex/`, `.npmrc`, plus any repository-relative
+glob a project declares in `.ai-orchestrator-protected-paths`. Existence, type,
+mode, and content hash are compared before and after every lane. The guard state
+lives outside everything the model can write, which is why the lane contract
+excludes `/tmp` and `$TMPDIR` from `workspace-write` and requires the startup
+summary to read `sandbox: workspace-write [workdir]`.
+
+Any change is a violation by default and forces `STATUS: refused`, so an
+implementer cannot make verification pass by editing local secrets or local tool
+configuration, and cannot widen its own room by editing the protected-path list.
+A task that genuinely needs a local ignored-config change stops and reports it;
+only explicit human or architect authorization handles it, as separate work.
 
 Clean-context review is also resolved at runtime. Only an `AVAILABLE` capability
 report with captured Fable `modelUsage` and a consumable verdict counts as a
@@ -185,8 +235,9 @@ human authority boundary, and unwanted automatic Production paths.
 
 ## Upstream sync
 
-This fork retains the upstream plugin name, layout, license, assets, and the
-three original agent filenames. Intentional doctrine changes are concentrated in
+This fork retains the upstream layout, license, assets, and the three original
+agent filenames. It deliberately does **not** retain the upstream plugin or
+marketplace name; see [Attribution and package identity](#attribution-and-package-identity). Intentional doctrine changes are concentrated in
 `README.md`, `skills/orchestration/SKILL.md`, and the three upstream agent files;
 new roles and contracts are additive.
 
@@ -198,4 +249,5 @@ broadly rename upstream files.
 
 ## License
 
-MIT. The upstream [`LICENSE`](LICENSE) is preserved unchanged.
+MIT. The upstream [`LICENSE`](LICENSE) and its copyright notice are preserved
+unchanged; this fork adds no separate license terms.

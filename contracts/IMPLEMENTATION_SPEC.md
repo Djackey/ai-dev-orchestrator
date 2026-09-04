@@ -1,7 +1,18 @@
 # IMPLEMENTATION_SPEC
 
-Use only after the root cause and implementation direction are sufficiently
-determined.
+Use once the implementation direction is sufficiently determined.
+
+For ordinary feature, refactor, and change work, "sufficiently determined" means
+the objective, allowed files, interfaces, constraints, and deterministic
+verification are settled enough that what remains is implementation rather than
+investigation. There is no root cause to confirm when there is no defect to
+explain, and this contract does not invent one.
+
+For incident, defect, and debugging work — and for the risk domains listed in
+[`EVIDENCE_FIRST_SPEC`](EVIDENCE_FIRST_SPEC.md) — the evidence threshold in that
+contract applies **in addition**: the architect must first record
+`ROOT_CAUSE_CONFIRMED`, or document an explicit bounded risk acceptance, before
+an implementation spec may exist. That threshold is not relaxed here.
 
 ```text
 IMPLEMENTATION_SPEC

@@ -85,15 +85,18 @@ invoke codex non-interactively. `DELTA_STATE` must be outside the worktree:
 DELTA_STATE=$(mktemp -t codex-delta.XXXXXX)
 ruby "${CLAUDE_PLUGIN_ROOT}/scripts/worktree-delta.rb" snapshot "$DELTA_STATE" "$(pwd)"
 
-T=$(command -v gtimeout || command -v timeout || true)
-[ -z "$T" ] && echo "WARN: no timeout binary — codex runs uncapped (brew install coreutils to cap)"
+PROTECTED_STATE=$(mktemp -t protected-state.XXXXXX)
+ruby "${CLAUDE_PLUGIN_ROOT}/scripts/protected-paths.rb" snapshot "$PROTECTED_STATE" "$(pwd)"
+
+TIMEOUT_BIN=$(command -v gtimeout || command -v timeout || true)
+[ -z "$TIMEOUT_BIN" ] && echo "WARN: no timeout binary; Codex runs uncapped (brew install coreutils to cap)"
 
 MODEL=gpt-5.6-luna
 TIMEOUT_SECONDS=600
 EFFORT="<exact value from REASONING, or empty>"
 
-if [ -n "$T" ]; then
-  set -- "$T" "$TIMEOUT_SECONDS" "$CODEX_BIN" --ask-for-approval never exec
+if [ -n "$TIMEOUT_BIN" ]; then
+  set -- "$TIMEOUT_BIN" "$TIMEOUT_SECONDS" "$CODEX_BIN" --ask-for-approval never exec
 else
   set -- "$CODEX_BIN" --ask-for-approval never exec
 fi
@@ -102,6 +105,8 @@ if [ -n "$EFFORT" ]; then
   set -- "$@" -c "model_reasoning_effort=$EFFORT"
 fi
 set -- "$@" \
+  -c sandbox_workspace_write.exclude_tmpdir_env_var=true \
+  -c sandbox_workspace_write.exclude_slash_tmp=true \
   --sandbox workspace-write \
   --skip-git-repo-check \
   --cd "$(pwd)" \
@@ -118,6 +123,9 @@ Immediately after the invocation, run:
 ```bash
 DELTA_EXIT=0
 ruby "${CLAUDE_PLUGIN_ROOT}/scripts/worktree-delta.rb" check "$DELTA_STATE" "$(pwd)" || DELTA_EXIT=$?
+
+PROTECTED_EXIT=0
+ruby "${CLAUDE_PLUGIN_ROOT}/scripts/protected-paths.rb" check "$PROTECTED_STATE" "$(pwd)" || PROTECTED_EXIT=$?
 ```
 
 `DELTA_EXIT=3` is deterministically empty and **must** produce `STATUS: refused`,
@@ -125,6 +133,16 @@ even if Codex exited zero, said the objective was already satisfied, or tests
 pass. `DELTA_EXIT=0` proves only that files changed; it does not prove the
 changes are correct. Any other exit is a guard failure and cannot be complete.
 Read the actual Git diff to attribute and assess the reported changes.
+
+`PROTECTED_EXIT=4` is `PROTECTED_STATE_VIOLATION` and **must** also produce
+`STATUS: refused`, naming the violated paths in `REASON`. The guard covers a
+short explicit list — `.env`, `.env.*`, `.claude/settings.local.json`, `.codex/`,
+`.npmrc`, and any glob declared in `.ai-orchestrator-protected-paths` — not the
+whole ignored tree. Never relax it, never edit that configuration to make your
+own run pass, and never treat a needed local-config change as implied authority:
+stop and report it for explicit human or architect authorization. Any exit other
+than `0` or `4` is a guard failure and cannot be complete. Report the outcome in
+`PROTECTED_STATE`.
 
 Flag discipline (non-negotiable):
 
@@ -134,16 +152,17 @@ Flag discipline (non-negotiable):
 | `--model "$MODEL"` | The lane mapping is explicit. A different model requires a new architect routing decision. |
 | `-c "model_reasoning_effort=$EFFORT"` | Only when the spec named one; exact pass-through with no zsh word-splitting bug. |
 | `--sandbox workspace-write` | Codex writes code, scoped to the working tree. Never `danger-full-access`. |
+| `-c sandbox_workspace_write.exclude_tmpdir_env_var=true` + `exclude_slash_tmp=true` | `workspace-write` otherwise also grants `/tmp` and `$TMPDIR`, where `mktemp` puts the guard baselines and transcripts. Without these the model could rewrite its own evidence. |
 | `--ask-for-approval never` before `exec` | Current CLI top-level placement; denied out-of-sandbox actions fail instead of hanging. |
 | `--skip-git-repo-check` + `--cd "$(pwd)"` | Deterministic working root; works outside git repos. |
 | `- < "$SPEC"` | Prompt via stdin. No quoting hazards or truncated specs. |
 | quoted positional timeout prefix | Ten-minute cap when `timeout`/`gtimeout` exists; valid in bash and zsh. |
 
-Never use `${T:+$T 600}` or an unquoted optional effort expansion. Never retry without the timeout after a wrapper failure. Exit `124` is `STATUS: timeout`; preserve the transcript and inspect whatever partial delta landed.
+Never use `${TIMEOUT_BIN:+$TIMEOUT_BIN 600}` or an unquoted optional effort expansion. Never retry without the timeout after a wrapper failure. Exit `124` is `STATUS: timeout`; preserve the transcript and inspect whatever partial delta landed.
 When no timeout binary exists, keep the warning visible and report the uncapped
 run in `GAPS`; do not imply that a timeout was active.
 
-3. **Verify model resolution and work independently.** Require the transcript to show `model: gpt-5.6-luna`, the requested reasoning effort when supplied, and `sandbox: workspace-write`. If those are absent or different, return `STATUS: unavailable`; do not claim the requested model ran. Compare the post-run worktree with the recorded baseline, read the actual task delta, independently re-run `VERIFICATION`, and read `"$FINAL"`. Codex's claim of success is not evidence; your re-run is.
+3. **Verify model resolution and work independently.** Require the transcript to show `model: gpt-5.6-luna`, the requested reasoning effort when supplied, and `sandbox: workspace-write [workdir]` with no `/tmp` or `$TMPDIR` in the writable set. A writable `$TMPDIR` means the model could have rewritten the guard baselines and this transcript, so the run is `STATUS: unavailable`. If those lines are absent or different, return `STATUS: unavailable`; do not claim the requested model ran. Compare the post-run worktree with the recorded baseline, read the actual task delta, independently re-run `VERIFICATION`, and read `"$FINAL"`. Codex's claim of success is not evidence; your re-run is.
 
 ## What you return
 
@@ -157,6 +176,7 @@ STATUS: complete | partial | timeout | unavailable | refused
 REASON: [exact failure/timeout/refusal reason, or none]
 OBJECTIVE: [restated in one line]
 CHANGES: [file — one-line summary, per file, from the actual task delta]
+PROTECTED_STATE: unchanged | violation: [exact paths]
 VERIFIED: [verification command you re-ran — actual output evidence]
 MODEL_SAID: [one-line summary of codex's final message; note disagreement]
 JUDGMENT_CALLS: [normally none; otherwise task may be misclassified]
@@ -170,6 +190,9 @@ GAPS: [spec ambiguities, unfinished items, or none]
 - **Exit zero plus no task delta is never `complete`.** The deterministic
   `worktree-delta.rb` result overrides the model report; return `STATUS: refused`
   and quote the final message in `REASON`.
+- **A protected local-state violation is never `complete`.** Editing local
+  secrets or local tool configuration to satisfy verification is a refusal, not
+  a workaround.
 - If codex's changes are wrong, report that plainly with failing evidence — do not patch them yourself.
 - If the spec is wrong, stop and report `SPEC_FAILURE`; the architect corrects it.
 - If ordinary judgment remained, report `TASK_MISCLASSIFICATION`; the architect may deliberately reroute to `terra-implementer`.

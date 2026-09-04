@@ -54,15 +54,29 @@ never improvise a weaker contract. In particular:
   failure.
 - Invoke the exact resolved `"$CODEX_BIN"` with `--ask-for-approval never exec`
   and the explicit model,
+  `-c sandbox_workspace_write.exclude_tmpdir_env_var=true`,
+  `-c sandbox_workspace_write.exclude_slash_tmp=true`,
   `--sandbox workspace-write`, deterministic `--cd`, stdin prompt, and unique
-  transcript/final files.
-- Require transcript evidence for model, requested effort, and sandbox. A
-  missing or different resolution is `unavailable`, not permission to use Luna,
-  Sol, or Claude.
+  transcript/final files. Without the two exclusions the sandbox also grants
+  `/tmp` and `$TMPDIR`, where the guard baselines and transcripts live.
+- Require transcript evidence for model, requested effort, and
+  `sandbox: workspace-write [workdir]` with no `/tmp` or `$TMPDIR` in the
+  writable set. A missing, different, or tmp-writable resolution is
+  `unavailable`, not permission to use Luna, Sol, or Claude.
 - Inspect the actual task delta and independently re-run `VERIFICATION`. Empty
   delta and implementer self-report are not completion evidence. Use
   `${CLAUDE_PLUGIN_ROOT}/scripts/worktree-delta.rb` exactly as the shared
   contract requires; `STATUS: empty` forces `STATUS: refused`.
+- Snapshot and re-check protected local state with
+  `${CLAUDE_PLUGIN_ROOT}/scripts/protected-paths.rb` around the invocation. It
+  covers a short explicit list — `.env`, `.env.*`,
+  `.claude/settings.local.json`, `.codex/`, `.npmrc`, and any glob declared in
+  `.ai-orchestrator-protected-paths` — not the whole ignored tree. Exit `4` /
+  `STATUS: violation` is `PROTECTED_STATE_VIOLATION` and forces
+  `STATUS: refused` with the violated paths in `REASON`. Never relax the guard or
+  edit its configuration to make your own run pass; a task that genuinely needs a
+  local ignored-config change stops and reports it for explicit human or
+  architect authorization. Report the outcome in `PROTECTED_STATE`.
 - Never commit, merge, deploy, mutate Production, or cross an authority boundary.
 
 Ask Codex to list local judgment calls. Return the exact `IMPLEMENTATION REPORT`

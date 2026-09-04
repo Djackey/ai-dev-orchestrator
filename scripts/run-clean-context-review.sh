@@ -32,7 +32,7 @@ trap 'rm -f "$JSON_FILE" "$ERROR_FILE"' EXIT HUP INT TERM
 
 review_exit=0
 "$CLAUDE_BIN" -p \
-  --agent fable-advisor \
+  --agent ai-dev-orchestrator:fable-advisor \
   --plugin-dir "$ROOT" \
   --tools "Read,Grep,Glob" \
   --permission-mode dontAsk \

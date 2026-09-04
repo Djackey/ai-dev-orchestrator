@@ -33,6 +33,9 @@ STOP_CONDITIONS
 ```
 
 Do not name implementation `FILES` during the evidence phase. An error string is
-not a root cause. Only after the architect records `ROOT_CAUSE_CONFIRMED`, or
-explicitly documents an exceptional risk acceptance, may it issue an
-`IMPLEMENTATION_SPEC`.
+not a root cause. Once a task is inside this contract, only after the architect
+records `ROOT_CAUSE_CONFIRMED`, or explicitly documents an exceptional risk
+acceptance, may it issue an `IMPLEMENTATION_SPEC`. This threshold is a property
+of evidence-first work, not a universal precondition for every implementation
+spec; ordinary feature work is governed by
+[`IMPLEMENTATION_SPEC`](IMPLEMENTATION_SPEC.md) alone.

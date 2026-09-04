@@ -37,9 +37,11 @@ for file in \
   scripts/run-clean-context-review.sh \
   scripts/parse-review-result.rb \
   scripts/worktree-delta.rb \
+  scripts/protected-paths.rb \
   tests/codex-resolution-contract.sh \
   tests/reviewer-contract.sh \
-  tests/worktree-delta-contract.sh; do
+  tests/worktree-delta-contract.sh \
+  tests/protected-paths-contract.sh; do
   require_file "$file"
 done
 
@@ -56,11 +58,21 @@ from pathlib import Path
 plugin = json.loads(Path(".claude-plugin/plugin.json").read_text())
 market = json.loads(Path(".claude-plugin/marketplace.json").read_text())
 entry = market["plugins"][0]
-assert plugin["name"] == market["name"] == entry["name"]
+assert plugin["name"] == market["name"] == entry["name"] == "ai-dev-orchestrator"
+assert plugin["name"] != "fable-advisor", "fork must not reuse the upstream package identity"
 assert plugin["license"] == "MIT"
-assert plugin["version"] == "5.1.0"
-' || fail 'plugin/marketplace metadata consistency'
-printf 'PASS: plugin/marketplace metadata consistency\n'
+assert plugin["version"] == "0.1.0"
+assert plugin["author"]["name"] == market["owner"]["name"] == "Djackey"
+assert plugin["homepage"] == "https://github.com/Djackey/ai-dev-orchestrator"
+assert plugin["repository"] == plugin["homepage"]
+' || fail 'fork plugin/marketplace identity'
+printf 'PASS: fork package identity distinct from upstream\n'
+
+require_text LICENSE 'Copyright (c) 2026 Dan McAteer'
+require_text README.md '## Attribution and package identity'
+require_text README.md '[fable-advisor](https://github.com/DannyMac180/fable-advisor)'
+require_text README.md '| Plugin name | `fable-advisor` | `ai-dev-orchestrator` |'
+printf 'PASS: upstream attribution and preserved license\n'
 
 require_text README.md '`IMPLEMENTER_MECHANICAL` | GPT-5.6 Luna | `codex-implementer`'
 require_text README.md '`IMPLEMENTER_BALANCED` | GPT-5.6 Terra | `terra-implementer`'
@@ -87,6 +99,56 @@ require_text contracts/IMPLEMENTATION_LANE_CONTRACT.md '`STATUS: empty` MUST for
 require_text contracts/IMPLEMENTATION_LANE_CONTRACT.md 'CODEX_ARGV_CONTRACT_START'
 require_text contracts/IMPLEMENTATION_LANE_CONTRACT.md 'uncapped run in `GAPS`'
 printf 'PASS: no-fallback, sandbox, empty-diff, and verification guards\n'
+
+require_text contracts/IMPLEMENTATION_LANE_CONTRACT.md '## Protected local state'
+require_text contracts/IMPLEMENTATION_LANE_CONTRACT.md 'PROTECTED_STATE_VIOLATION'
+require_text contracts/IMPLEMENTATION_LANE_CONTRACT.md 'never a scan of the ignored tree'
+require_text contracts/IMPLEMENTATION_LANE_CONTRACT.md '.ai-orchestrator-protected-paths'
+require_text contracts/IMPLEMENTATION_LANE_CONTRACT.md 'union of the baseline and current patterns'
+require_text skills/orchestration/SKILL.md '## Protected local state'
+for file in agents/codex-implementer.md agents/terra-implementer.md agents/sol-implementer.md agents/evidence-explorer.md; do
+  require_text "$file" 'scripts/protected-paths.rb'
+  require_text "$file" 'PROTECTED_STATE'
+  require_text "$file" '.ai-orchestrator-protected-paths'
+done
+if rg --quiet 'node_modules' scripts/protected-paths.rb; then
+  :
+else
+  fail 'protected-paths guard must exclude node_modules explicitly'
+fi
+printf 'PASS: protected local-state guard contract\n'
+
+require_text contracts/IMPLEMENTATION_LANE_CONTRACT.md 'sandbox_workspace_write.exclude_tmpdir_env_var=true'
+require_text contracts/IMPLEMENTATION_LANE_CONTRACT.md 'sandbox_workspace_write.exclude_slash_tmp=true'
+require_text contracts/IMPLEMENTATION_LANE_CONTRACT.md 'sandbox: workspace-write [workdir]'
+for file in agents/codex-implementer.md agents/terra-implementer.md agents/sol-implementer.md; do
+  require_text "$file" 'sandbox_workspace_write.exclude_tmpdir_env_var=true'
+  require_text "$file" 'sandbox_workspace_write.exclude_slash_tmp=true'
+  require_text "$file" 'workspace-write [workdir]'
+done
+require_text agents/fable-advisor.md 'alone on its own line, exactly once'
+printf 'PASS: guard baselines are outside the sandbox writable set\n'
+
+require_text scripts/parse-review-result.rb 'VERDICT_AMBIGUOUS'
+require_text scripts/parse-review-result.rb 'PARSED_VERDICT'
+require_text scripts/parse-review-result.rb 'VERDICT_LINE'
+require_text scripts/run-clean-context-review.sh '--agent ai-dev-orchestrator:fable-advisor'
+require_text scripts/parse-review-result.rb 'REQUESTED_AGENT: ai-dev-orchestrator:fable-advisor'
+if rg --quiet 'result\.match\?\(/VERDICT' scripts/parse-review-result.rb; then
+  fail 'reviewer parser still accepts a substring verdict'
+fi
+printf 'PASS: reviewer verdict parser is line-anchored and fails closed\n'
+
+require_text contracts/IMPLEMENTATION_SPEC.md 'Use once the implementation direction is sufficiently determined.'
+require_text contracts/IMPLEMENTATION_SPEC.md 'There is no root cause to confirm when there is no defect to'
+require_text contracts/IMPLEMENTATION_SPEC.md 'That threshold is not relaxed here.'
+require_text contracts/EVIDENCE_FIRST_SPEC.md 'not a universal precondition for every implementation'
+require_text skills/orchestration/SKILL.md 'This threshold belongs to evidence-first work.'
+require_text README.md 'Not every implementation'
+if rg --quiet 'Use only after the root cause' contracts README.md skills agents; then
+  fail 'IMPLEMENTATION_SPEC still requires a root cause for every implementation'
+fi
+printf 'PASS: implementation-spec semantics scoped to evidence-first work\n'
 
 require_text agents/evidence-explorer.md '`--sandbox read-only`'
 require_text agents/evidence-explorer.md 'change is a contract violation'
@@ -122,6 +184,7 @@ printf 'PASS: human authority boundary and no automatic Production path\n'
 ./tests/codex-resolution-contract.sh
 ./tests/reviewer-contract.sh
 ./tests/worktree-delta-contract.sh
+./tests/protected-paths-contract.sh
 
 git diff --check
 printf 'PASS: git diff --check\n'

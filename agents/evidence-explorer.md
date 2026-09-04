@@ -45,8 +45,17 @@ error location is not proof of the root cause.
   result; exit `0` / `STATUS: changed` is `read_only_violation`. Any workspace
   change is a contract violation: report it immediately and do not conceal it.
   The helper inventories tracked and nonignored untracked content; ignored paths
-  are not hashed. Codex `--sandbox read-only` is the actual write boundary for
-  those paths, and the report must not claim the hash check covers them.
+  are not hashed, apart from the protected local state below. Codex
+  `--sandbox read-only` is the actual write boundary for every other ignored
+  path, and the report must not claim the hash check covers them.
+- Also snapshot and re-check protected local state with
+  `${CLAUDE_PLUGIN_ROOT}/scripts/protected-paths.rb`, using a unique `mktemp`
+  state path outside the worktree. It covers a short explicit list — `.env`,
+  `.env.*`, `.claude/settings.local.json`, `.codex/`, `.npmrc`, and any glob
+  declared in `.ai-orchestrator-protected-paths` — never the whole ignored tree.
+  For this read-only lane, exit `0` / `STATUS: unchanged` is the required result;
+  exit `4` / `STATUS: violation` is `read_only_violation`. Never relax the guard
+  or edit its configuration. Report the outcome in `PROTECTED_STATE`.
 - The wrapper may use Bash only for preflight, unique temporary prompt/output
   files, read-only searches/history/log inspection, the read-only Codex call,
   and the pre/post workspace check. Temporary files must be outside the repo.
@@ -66,6 +75,7 @@ REQUESTED_MODEL: gpt-5.6-terra
 RESOLVED_MODEL_EVIDENCE: <startup-summary line or unavailable>
 STATUS: complete | partial | timeout | unavailable | read_only_violation
 REASON: <exact failure/timeout/violation reason, or none>
+PROTECTED_STATE: unchanged | violation: <exact paths>
 
 OBSERVED:
 <direct evidence with path/line, command, log event, commit, or other provenance>

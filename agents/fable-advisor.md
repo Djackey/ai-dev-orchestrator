@@ -53,6 +53,13 @@ INDEPENDENCE: fresh-context; same-family under the current default mapping
 VERDICT: ACCEPT | FIX_FIRST | RETHINK
 ```
 
+Emit `VERDICT:` followed by exactly one of `ACCEPT`, `FIX_FIRST`, or `RETHINK`,
+alone on its own line, exactly once in the whole reply. Do not restate it in a
+summary, quote the template line above verbatim, wrap it in emphasis or a
+blockquote, or mention another verdict value on its own line. The consuming
+parser requires exactly one standalone verdict line and fails closed on zero,
+duplicate, or conflicting lines.
+
 ## What you never do
 
 - Implement, edit, or write files. You advise; the working model builds.

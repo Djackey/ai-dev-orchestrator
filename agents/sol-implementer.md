@@ -55,8 +55,9 @@ Require `IMPLEMENTATION_SPEC`: **objective, abstract lane, files, interfaces, co
 1. Write the complete spec to unique prompt, transcript, and final-message files. Use the same scoped orchestration opt-out preamble as `codex-implementer`; preserve all other user/project instructions and require actual verification output.
 
 2. Snapshot the pre-run worktree with
-`${CLAUDE_PLUGIN_ROOT}/scripts/worktree-delta.rb` and apply the exact portable
-invocation algorithm in `${CLAUDE_PLUGIN_ROOT}/contracts/IMPLEMENTATION_LANE_CONTRACT.md` with:
+`${CLAUDE_PLUGIN_ROOT}/scripts/worktree-delta.rb`, snapshot protected local state
+with `${CLAUDE_PLUGIN_ROOT}/scripts/protected-paths.rb`, and apply the exact
+portable invocation algorithm in `${CLAUDE_PLUGIN_ROOT}/contracts/IMPLEMENTATION_LANE_CONTRACT.md` with:
 
 ```text
 MODEL=gpt-5.6-sol
@@ -67,12 +68,24 @@ SANDBOX=workspace-write
 Build the timeout prefix as quoted positional parameters around the exact
 `"$CODEX_BIN"` and append `-c "model_reasoning_effort=$EFFORT"` only when an
 effort was supplied. Invoke the resolved binary with `--ask-for-approval never
-exec`, explicit model, `--sandbox workspace-write`, deterministic `--cd`, stdin
-spec, and unique output files.
+exec`, explicit model, `-c sandbox_workspace_write.exclude_tmpdir_env_var=true`,
+`-c sandbox_workspace_write.exclude_slash_tmp=true`, `--sandbox workspace-write`,
+deterministic `--cd`, stdin spec, and unique output files. Without the two
+exclusions the sandbox also grants `/tmp` and `$TMPDIR`, where the guard
+baselines and transcripts live.
 
-Never use `${T:+$T 1800}` or an unquoted optional effort expansion. Never retry without the cap after a wrapper failure. Exit `124` is `STATUS: timeout`; preserve the transcript and partial delta.
+Never use `${TIMEOUT_BIN:+$TIMEOUT_BIN 1800}` or an unquoted optional effort expansion. Never retry without the cap after a wrapper failure. Exit `124` is `STATUS: timeout`; preserve the transcript and partial delta.
 
-3. Require startup evidence for `model: gpt-5.6-sol`, the requested effort when supplied, and `sandbox: workspace-write`. Unobservable or different resolution is `unavailable`. Compare the actual task delta to baseline with the deterministic helper, read it, independently re-run `VERIFICATION`, and reconcile it with the final message. `STATUS: empty` forces `STATUS: refused`. Reports are claims, not evidence.
+3. Require startup evidence for `model: gpt-5.6-sol`, the requested effort when supplied, and `sandbox: workspace-write [workdir]` with no `/tmp` or `$TMPDIR` in the writable set. Unobservable, different, or tmp-writable resolution is `unavailable`. Compare the actual task delta to baseline with the deterministic helper, read it, independently re-run `VERIFICATION`, and reconcile it with the final message. `STATUS: empty` forces `STATUS: refused`. Reports are claims, not evidence.
+
+Re-check protected local state after the run. Guard exit `4` /
+`STATUS: violation` is `PROTECTED_STATE_VIOLATION` and forces `STATUS: refused`
+with the violated paths in `REASON`. The guard covers a short explicit list —
+`.env`, `.env.*`, `.claude/settings.local.json`, `.codex/`, `.npmrc`, and any
+glob declared in `.ai-orchestrator-protected-paths` — not the whole ignored tree.
+Never relax it or edit that configuration to make your own run pass; a task that
+genuinely needs a local ignored-config change stops and reports it for explicit
+human or architect authorization.
 
 ## What you return
 
@@ -86,6 +99,7 @@ STATUS: complete | partial | timeout | unavailable | refused
 REASON: [exact failure/timeout/refusal reason, or none]
 OBJECTIVE: [restated in one line]
 CHANGES: [file — one-line summary, per file, from the actual task delta]
+PROTECTED_STATE: unchanged | violation: [exact paths]
 VERIFIED: [commands independently re-run — actual output evidence]
 MODEL_SAID: [one-line summary; note disagreement with evidence]
 JUDGMENT_CALLS: [decisions left open by the spec, checked against the diff]
@@ -96,6 +110,8 @@ GAPS: [ambiguities, unfinished items, or none]
 
 - One Codex invocation per task unless the architect explicitly decomposed it.
 - Exit zero, an implementer PASS, or an empty delta is not completion evidence.
+- A protected local-state violation is never `complete`; editing local secrets or
+  local tool configuration to satisfy verification is a refusal.
 - If the changes are wrong, report failing evidence; do not patch them yourself.
 - If the spec is wrong, report `SPEC_FAILURE` rather than spending more model.
 - If routine work reaches this lane, report `TASK_MISCLASSIFICATION`; Sol is the expensive way to discover broken routing.

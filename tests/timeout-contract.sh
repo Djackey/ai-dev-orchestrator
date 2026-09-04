@@ -48,7 +48,11 @@ expect_case() {
   printf 'PASS: %s timeout=%s effort=%s\n' "$shell_name" "${timeout_path:-absent}" "${effort:-absent}"
 }
 
-COMMON_SUFFIX='--sandbox
+COMMON_SUFFIX='-c
+sandbox_workspace_write.exclude_tmpdir_env_var=true
+-c
+sandbox_workspace_write.exclude_slash_tmp=true
+--sandbox
 workspace-write
 --skip-git-repo-check
 --cd

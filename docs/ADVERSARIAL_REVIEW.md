@@ -12,8 +12,11 @@ Performed against the complete working-tree change before handoff.
    `read-only` sandbox; the Claude wrapper exposes no Write/Edit tools, is
    forbidden to mutate, and a deterministic content baseline checks tracked and
    nonignored untracked files afterward. Real dogfood returned `STATUS: empty`
-   and matching pre/post hashes. Existing ignored paths are not hash-inventoried;
-   Codex's OS sandbox is the actual write boundary for them. Residual gap: the
+   and matching pre/post hashes. Ignored paths are not hash-inventoried apart
+   from the explicitly enumerated protected local state (`.env`, `.env.*`,
+   `.claude/settings.local.json`, `.codex/`, `.npmrc`, plus project-declared
+   globs); for every other ignored path Codex's OS sandbox is the actual write
+   boundary. Residual gap: the
    wrapper needs Bash to start Codex, and
    prompt-level Bash restrictions are not a cryptographic capability boundary.
    A future hook or narrowly scoped runner could harden this, but V1 deliberately
@@ -63,6 +66,80 @@ model gateway.
 Final clean-context review triggered four small hardening edits: the bash/zsh
 timeout test now extracts the marked argv block from the real contract instead
 of copying it and anchors its working directory, an uncapped run must appear in
-report `GAPS`, and ignored-path limits of the content guard are explicit. The
-fork manifest also advanced from upstream 5.0.0 to the unpublished 5.1.0
-version.
+report `GAPS`, and ignored-path limits of the content guard are explicit.
+
+## Independent review round two — 2026-09-04
+
+An independent review returned four `FIX_FIRST` findings against the Draft PR.
+All four were accepted and fixed on the same branch.
+
+11. **Could the fork collide with upstream `fable-advisor`?** It could. The
+    manifests still carried upstream's plugin name, marketplace name, owner,
+    homepage, and a 5.1.0 version in upstream's own release line. Fixed: the
+    package identity is now `ai-dev-orchestrator` at `0.1.0` under the fork's
+    owner and homepage, validated by `scripts/validate-contracts.sh`. Upstream
+    attribution, the MIT `LICENSE` and its copyright, agent filenames, and the
+    skill layout are unchanged, so upstream syncs stay small.
+12. **Could a mentioned verdict be read as a verdict?** It could. The parser
+    accepted any `VERDICT: ACCEPT` substring, so a quoted schema line or a
+    sentence discussing a verdict would satisfy it. Fixed: exactly one
+    standalone, line-anchored verdict is required; zero and two or more both
+    fail closed (`OUTPUT_NOT_CAPTURED` / `VERDICT_AMBIGUOUS`), and the accepted
+    value is echoed as `PARSED_VERDICT`. Seven deterministic cases cover valid
+    ACCEPT/FIX_FIRST/RETHINK, no verdict, quoted/non-line verdict, duplicate
+    verdicts, and conflicting verdicts. The `modelUsage` and permission-denial
+    gates are unchanged.
+13. **Did the contracts demand a root cause for greenfield work?**
+    `IMPLEMENTATION_SPEC` opened with "use only after the root cause ... are
+    sufficiently determined", which reads as a universal precondition. Fixed:
+    ordinary feature/refactor/change work needs only a sufficiently determined
+    implementation direction; the `ROOT_CAUSE_CONFIRMED` threshold is stated as
+    a property of incident/debugging work and the `EVIDENCE_FIRST_SPEC` risk
+    domains. `EVIDENCE_FIRST_SPEC` semantics are not relaxed.
+14. **Could an implementer pass verification by editing ignored local state?**
+    It could. The content baseline never sees ignored paths. Fixed with a
+    minimal protected-local-state contract (`scripts/protected-paths.rb`) over
+    `.env`, `.env.*`, `.claude/settings.local.json`, `.codex/`, `.npmrc`, and
+    globs a project declares in `.ai-orchestrator-protected-paths`. It compares
+    existence, type, mode, and content hash before and after each lane; any
+    change is a violation that forces `STATUS: refused`. It deliberately does
+    not scan the ignored tree: `node_modules` and `.git` are excluded outright,
+    an oversized inventory fails loudly instead of walking a tree, and dropping
+    a declared pattern cannot shrink coverage because `check` unions baseline
+    and current patterns. The guard is never automatically relaxed; a genuine
+    local ignored-config change requires explicit human or architect
+    authorization as separate work.
+
+15. **Could a guarded lane rewrite the guard's own baseline?** It could, until
+    the fresh-context review of this round caught it. Current Codex
+    `workspace-write` grants `[workdir, /tmp, $TMPDIR]`, and `mktemp` writes the
+    delta and protected-state baselines into `$TMPDIR`, so a lane could edit a
+    protected path and then restore the baseline JSON. Fixed in the marked argv
+    contract with `-c sandbox_workspace_write.exclude_tmpdir_env_var=true` and
+    `-c sandbox_workspace_write.exclude_slash_tmp=true`, verified live: the
+    startup summary changes from `workspace-write [workdir, /tmp, $TMPDIR]` to
+    `workspace-write [workdir]`. Because an older CLI could ignore an unknown
+    `-c` key, that exact line is now required startup evidence; a writable
+    `/tmp` or `$TMPDIR` makes the run `unavailable` rather than `complete`. The
+    deterministic bash/zsh argv test extracts the same block, so test and
+    contract cannot drift.
+
+16. **Could the reviewer runner reach upstream's agent instead of this fork's?**
+    The runner asked for a bare `--agent fable-advisor`, which is exactly the
+    name both packages share. It now asks for
+    `ai-dev-orchestrator:fable-advisor`, verified live to resolve
+    `claude-fable-5-1` under `--plugin-dir`, and the parser reports the
+    namespaced identity. This is the last place the fork's identity fix had to
+    reach.
+17. **Could a malformed reviewer payload slip past the gates?** A JSON `null`
+    for `modelUsage` or `permission_denials` previously raised inside the parser:
+    still non-zero, but without a structured classification. Both fields are now
+    type-checked. An absent `permission_denials` stays tolerated for older CLI
+    payloads; a present-but-malformed one is `OUTPUT_NOT_CAPTURED`, and a
+    non-object `modelUsage` is `MODEL_UNRESOLVED`. Three cases were added.
+
+Residual gap recorded, not closed: `.git` and `node_modules` are excluded from
+the protected inventory so the guard stays a short list rather than a tree scan.
+`.git/hooks` is therefore a blind spot shared with the worktree content baseline,
+and the Codex sandbox remains its only boundary. Closing it needs a separate,
+deliberately scoped change rather than widening this guard.

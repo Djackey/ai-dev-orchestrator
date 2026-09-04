@@ -1,26 +1,26 @@
 {
-  "name": "fable-advisor",
-  "version": "5.1.0",
+  "name": "ai-dev-orchestrator",
+  "version": "0.1.0",
   "description": "Evidence-first, capability-routed development orchestration: frontier architecture, Luna mechanical implementation, Terra balanced implementation and exploration, Sol escalation, independent verification, fresh-context review, and explicit human Production authority.",
   "author": {
-    "name": "Dan McAteer",
-    "url": "https://github.com/DannyMac180"
+    "name": "Djackey",
+    "url": "https://github.com/Djackey"
   },
-  "homepage": "https://github.com/DannyMac180/fable-advisor",
+  "homepage": "https://github.com/Djackey/ai-dev-orchestrator",
+  "repository": "https://github.com/Djackey/ai-dev-orchestrator",
   "license": "MIT",
   "keywords": [
     "agents",
     "model-routing",
+    "orchestration",
+    "architect",
+    "evidence-first",
+    "human-gated",
+    "codex",
+    "reasoning-effort",
     "fable",
     "sol",
     "luna",
-    "terra",
-    "evidence-first",
-    "human-gated",
-    "advisor",
-    "orchestration",
-    "architect",
-    "codex",
-    "reasoning-effort"
+    "terra"
   ]
 }

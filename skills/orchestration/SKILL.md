@@ -99,15 +99,24 @@ Do not preselect its file for editing. Luna may do bounded, read-only scouting
 such as finding call sites or history, but Terra or the architect synthesizes
 the evidence.
 
-Only after the architect records `ROOT_CAUSE_CONFIRMED` may it normally issue an
-`IMPLEMENTATION_SPEC`. Exceptional risk acceptance must be explicit, explain
-what remains unresolved, and remain inside the human authority boundary.
+Within an evidence-first task, only after the architect records
+`ROOT_CAUSE_CONFIRMED` may it normally issue an `IMPLEMENTATION_SPEC`.
+Exceptional risk acceptance must be explicit, explain what remains unresolved,
+and remain inside the human authority boundary.
+
+This threshold belongs to evidence-first work. It is not a universal
+precondition: ordinary feature, refactor, and change work has no defect to
+explain, and requires only that the implementation direction is sufficiently
+determined. Do not manufacture a root cause for greenfield work, and do not
+treat the absence of one as a reason to withhold an `IMPLEMENTATION_SPEC`.
 
 ## Spec contracts
 
 ### IMPLEMENTATION_SPEC
 
-Use `${CLAUDE_PLUGIN_ROOT}/contracts/IMPLEMENTATION_SPEC.md` after cause and direction are known:
+Use `${CLAUDE_PLUGIN_ROOT}/contracts/IMPLEMENTATION_SPEC.md` once the
+implementation direction is sufficiently determined — and, for evidence-first
+tasks only, once that contract's root-cause threshold is also met:
 
 ```text
 OBJECTIVE
@@ -149,11 +158,16 @@ All three implementers follow
 - explicit model selection with observable resolution evidence;
 - exact per-task reasoning propagation;
 - no silent model or vendor fallback;
-- `workspace-write` sandbox and `--ask-for-approval never`;
+- `workspace-write` sandbox and `--ask-for-approval never`, with `/tmp` and
+  `$TMPDIR` excluded so guard baselines and transcripts stay unwritable;
 - portable bash/zsh timeout construction with no uncapped retry;
 - unique prompt, transcript, and final-message files;
 - pre-run baseline and actual task-delta inspection;
 - exit-zero + empty-delta rejection;
+- a protected local-state guard over `.env`, `.env.*`,
+  `.claude/settings.local.json`, `.codex/`, `.npmrc`, and any project-declared
+  sensitive ignored paths, where any change is `PROTECTED_STATE_VIOLATION` and
+  forces `STATUS: refused`;
 - independent deterministic verification;
 - structured report; and
 - no commit, merge, deploy, Production mutation, or irreversible external act.
@@ -163,7 +177,33 @@ re-runs verification before acceptance. An implementer saying PASS cannot close
 a task.
 
 The evidence explorer uses the same resolution/timeout/reporting discipline but
-sets `--sandbox read-only` and verifies the workspace did not change.
+sets `--sandbox read-only` and verifies that neither the workspace nor the
+protected local state changed.
+
+## Protected local state
+
+The worktree content baseline covers tracked and nonignored untracked files. It
+deliberately does not scan the ignored tree or `node_modules`. A short explicit
+list is guarded separately by
+`${CLAUDE_PLUGIN_ROOT}/scripts/protected-paths.rb`: `.env`, `.env.*`,
+`.claude/settings.local.json`, `.codex/`, `.npmrc`, and any repository-relative
+glob declared in `.ai-orchestrator-protected-paths`. Existence, type, mode, and
+content hash are compared before and after every write or evidence lane. The
+guard only holds while its baseline is outside the model's writable set, so the
+lane contract excludes `/tmp` and `$TMPDIR` from `workspace-write` and the lane
+must observe `sandbox: workspace-write [workdir]` before trusting any baseline.
+
+Default: any change is a guard violation. An implementer may not make
+verification pass by editing local secrets or local tool configuration, and may
+not edit the protected-path configuration to widen its own room. A dropped
+pattern does not shrink coverage, because the check unions baseline and current
+patterns.
+
+If a task genuinely requires changing local ignored configuration, the lane
+stops and reports it. The guard is never automatically relaxed:
+`HUMAN_RELEASE_AUTHORITY`, or the architect acting on explicit human
+authorization, approves that change as a separate, explicitly scoped piece of
+work.
 
 ## Model and effort resolution
 
@@ -239,7 +279,8 @@ Production canary also requires explicit user authorization; without it, stop at
 
 Before accepting work, the architect must:
 
-1. identify the lane's actual delta relative to its baseline;
+1. identify the lane's actual delta relative to its baseline, and confirm the
+   protected local-state guard reported `unchanged`;
 2. read the diff and check allowed files/interfaces/constraints;
 3. independently execute every deterministic verification command;
 4. reconcile failures or differences with the implementer's report;

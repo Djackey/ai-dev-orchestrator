@@ -1,17 +1,17 @@
 {
-  "name": "fable-advisor",
+  "name": "ai-dev-orchestrator",
   "metadata": {
     "description": "Evidence-first, capability-routed development orchestration for Claude Code with mechanical, balanced, frontier, read-only evidence, fresh-context review, and human-gated Production roles."
   },
   "owner": {
-    "name": "Dan McAteer",
-    "url": "https://github.com/DannyMac180"
+    "name": "Djackey",
+    "url": "https://github.com/Djackey"
   },
   "plugins": [
     {
-      "name": "fable-advisor",
+      "name": "ai-dev-orchestrator",
       "source": "./",
-      "description": "A lightweight Claude Code architecture of abstract roles, evidence-first investigation, Luna/Terra/Sol Codex lanes, deterministic verification, fresh-context Fable review, and explicit human Production authority."
+      "description": "A lightweight Claude Code architecture of abstract roles, evidence-first investigation, Luna/Terra/Sol Codex lanes, deterministic verification, fresh-context Fable review, and explicit human Production authority. Independent fork of fable-advisor by Dan McAteer (MIT)."
     }
   ]
 }

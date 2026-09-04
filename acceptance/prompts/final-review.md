@@ -19,8 +19,20 @@ Judge only whether the current V1 is ready for a Draft PR. Attack these points:
 7. implementer verification never replaces orchestrator verification;
 8. Fable reviewer availability requires captured modelUsage and verdict, with
    every unavailable class loud;
-9. same-family fresh-context review is not described as cross-family; and
-10. vague implementation authority cannot merge or mutate Production.
+9. same-family fresh-context review is not described as cross-family;
+10. vague implementation authority cannot merge or mutate Production;
+11. the fork's plugin/marketplace identity cannot collide with upstream
+    `fable-advisor` installs, updates, or future versions, while upstream
+    attribution, the MIT license and its copyright, agent filenames, and the
+    skill layout are preserved;
+12. the reviewer verdict parser accepts exactly one standalone verdict line and
+    fails closed on zero, quoted, duplicate, or conflicting verdicts;
+13. `IMPLEMENTATION_SPEC` does not require a root cause for ordinary feature
+    work, while `EVIDENCE_FIRST_SPEC` semantics stay unrelaxed; and
+14. the protected local-state guard covers `.env`, `.env.*`,
+    `.claude/settings.local.json`, `.codex/`, `.npmrc`, and project-declared
+    globs, treats any change as a violation, never scans the ignored tree or
+    `node_modules`, and cannot be relaxed by the implementer.
 
 Use the acceptance evidence as a record, not as a substitute for reading the
 implementation. Do not edit. Return the exact REVIEW REPORT schema with
