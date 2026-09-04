@@ -1,7 +1,7 @@
 {
   "name": "fable-advisor",
   "metadata": {
-    "description": "Model-routing patterns for Claude Code: Fable 5.1 architect-as-orchestrator with a GPT-5.6 Luna routine lane, a GPT-5.6 Sol high-complexity lane, per-task reasoning effort, and a Fable 5.1 end-of-deliverable reviewer."
+    "description": "Evidence-first, capability-routed development orchestration for Claude Code with mechanical, balanced, frontier, read-only evidence, fresh-context review, and human-gated Production roles."
   },
   "owner": {
     "name": "Dan McAteer",
@@ -11,7 +11,7 @@
     {
       "name": "fable-advisor",
       "source": "./",
-      "description": "Fable 5.1 architect-as-orchestrator: your session writes specs and verdicts, routing routine implementation to GPT-5.6 Luna and high-complexity one-offs to GPT-5.6 Sol (both via Codex CLI, effort chosen per task) — with a mandatory Fable 5.1 review before anything ships."
+      "description": "A lightweight Claude Code architecture of abstract roles, evidence-first investigation, Luna/Terra/Sol Codex lanes, deterministic verification, fresh-context Fable review, and explicit human Production authority."
     }
   ]
 }
