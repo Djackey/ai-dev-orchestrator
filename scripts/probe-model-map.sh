@@ -93,6 +93,7 @@ python3 - "$OUTPUT_PATH" "$ALIASES_FILE" "$COSTS_FILE" <<'PY'
 import json
 import os
 import sys
+import tempfile
 
 output_path, aliases_path, costs_path = sys.argv[1:4]
 claude_version = os.environ.get("CLAUDE_VERSION", "")
@@ -122,11 +123,21 @@ payload = {
     "probeCostUsd": total_cost,
 }
 
-tmp_path = output_path + ".tmp"
-with open(tmp_path, "w", encoding="utf-8") as f:
-    json.dump(payload, f, indent=2, sort_keys=True)
-    f.write("\n")
-os.replace(tmp_path, output_path)
+out_dir = os.path.dirname(os.path.abspath(output_path))
+fd, tmp_path = tempfile.mkstemp(prefix=os.path.basename(output_path) + ".", suffix=".tmp", dir=out_dir)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, sort_keys=True)
+        f.write("\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_path, output_path)
+except BaseException:
+    try:
+        os.unlink(tmp_path)
+    except OSError:
+        pass
+    raise
 PY
 compose_exit=$?
 

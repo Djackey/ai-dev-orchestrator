@@ -59,7 +59,12 @@ deny list, never an ambient-trust or fully open session:
   against the runner's launch directory before the guard sees it. An
   `--allow-bash` prefix containing any character outside
   `[A-Za-z0-9_./ =-]` (including an empty prefix) is a usage error, not a
-  string concatenated unchecked into `--allowedTools`.
+  string concatenated unchecked into `--allowedTools`. A prefix that begins
+  with `git` must name a read-only subcommand (`status`, `diff`, `log`,
+  `show`, `ls-files`, `rev-parse`, `blame`, `grep`); a bare `git`, `git
+  commit`, `git push` or any other subcommand is refused
+  `unavailable`/`GUARD_FAILED` before `claude` runs, so the runner never
+  emits a permission through which the lane could commit, merge or push.
 
 ## The two guards
 
@@ -182,8 +187,10 @@ Whether an allowlisted Bash command could nonetheless reach a Production
 feature flag or some other irreversible external action is governed by the
 inherited-environment paragraph below and by the residual gaps, not by this
 sentence; the lane makes no claim that it "cannot" reach one.
-That is an authority boundary the lane's own invocation enforces, not a claim
-that the host environment is safe to run untrusted specs in: an allowlisted
+The runner enforces that boundary for `git` (see the invocation boundary
+above: no `--allow-bash` prefix can grant a writing git subcommand) and for
+nothing else; it is not a claim that the host environment is safe to run
+untrusted specs in: an allowlisted
 Bash command runs with whatever credentials, network access, and filesystem
 visibility the host process already has, and nothing here strips those. The
 absence of commit/merge/deploy authority is a residual gap, not a guarantee,

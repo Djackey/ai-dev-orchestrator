@@ -576,6 +576,19 @@ third-party tasks; the calibration is provisional in part for that reason,
 and row 2 (an unrelated downstream product task) is the only independent data
 point and the strongest single one.
 
+Row 7 is not a lane run: after the third Codex review (of `ad3222c`) returned
+FIX_FIRST on a fixed-name temporary file in the probe and on the contract's
+claim that the invocation "enforces" the authority boundary while
+`--allow-bash git` would emit `Bash(git:*)`, the architect made the
+corrections directly — a unique temporary file with `os.replace`, a refusal of
+any `--allow-bash` git prefix that is not a read-only subcommand, a rejection
+of option tokens as option values, the nested-checkout case, and the contract
+and README wording — with cases (z7)–(z9), and re-ran
+`tests/claude-lane-contract.sh` and `scripts/validate-contracts.sh`. The
+provenance of the model map and of `claude` on `PATH` stays an accepted
+residual gap: the architect's own environment is trusted by design, and the
+lane's claim is only that the implementer cannot alter it.
+
 Rows 5 and 6 above are, like rows 1 and 3/4, the lane fixing itself, not new
 calibration data points; they do not change the 3-spec count or arithmetic in
 this section. Row 6 is also the first run in which the architect corrected the

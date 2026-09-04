@@ -65,6 +65,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --effort|--max-turns|--max-budget-usd|--allow-bash|--allow-path|--model-map)
       [ $# -ge 2 ] || unavailable GUARD_FAILED "$1 requires a value"
+      case "$2" in --*) unavailable GUARD_FAILED "$1 requires a value" ;; esac
       ;;
   esac
   case "$1" in
@@ -75,6 +76,18 @@ while [ $# -gt 0 ]; do
       case "$2" in
         *[!A-Za-z0-9_./=" "-]*|'')
           unavailable GUARD_FAILED "--allow-bash prefix contains a character outside [A-Za-z0-9_./ =-]"
+          ;;
+      esac
+      # A git prefix may only grant read-only subcommands: the lane's authority
+      # boundary (no commit, merge, push) is enforced here, not by convention.
+      case "$2" in
+        git|git" "*)
+          case "$2" in
+            "git status"|"git status "*|"git diff"|"git diff "*|"git log"|"git log "*|\
+            "git show"|"git show "*|"git ls-files"|"git ls-files "*|"git rev-parse"|"git rev-parse "*|\
+            "git blame"|"git blame "*|"git grep"|"git grep "*) ;;
+            *) unavailable GUARD_FAILED "--allow-bash git prefix must name a read-only subcommand (status, diff, log, show, ls-files, rev-parse, blame, grep): $2" ;;
+          esac
           ;;
       esac
       ALLOW_BASH_LIST="$ALLOW_BASH_LIST

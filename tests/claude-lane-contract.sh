@@ -670,3 +670,54 @@ assert_report "$RESULT_FILE" unavailable GUARD_FAILED
 assert_reason_contains "$RESULT_FILE" 'requires a value'
 assert_no_argv_log '(z6) --effort missing value' "$FIXTURE_ROOT/argv-z6.log"
 printf 'PASS: (z6) --effort as the last argument -> unavailable/GUARD_FAILED, claude never invoked\n'
+
+# (z7) a git prefix that could grant commit/merge/push authority is refused;
+# read-only git prefixes are still accepted (a) and (k) already prove.
+run_lane z7 available --allow-bash git
+assert_exit '(z7) bare git prefix' 1 "$LANE_EXIT"
+assert_report "$RESULT_FILE" unavailable GUARD_FAILED
+assert_reason_contains "$RESULT_FILE" 'read-only subcommand'
+assert_no_argv_log '(z7) bare git prefix' "$FIXTURE_ROOT/argv-z7.log"
+run_lane z7b available --allow-bash 'git commit'
+assert_exit '(z7b) git commit prefix' 1 "$LANE_EXIT"
+assert_report "$RESULT_FILE" unavailable GUARD_FAILED
+assert_reason_contains "$RESULT_FILE" 'read-only subcommand'
+assert_no_argv_log '(z7b) git commit prefix' "$FIXTURE_ROOT/argv-z7b.log"
+run_lane z7c available --allow-bash 'git status' --allow-bash 'git diff --stat'
+assert_exit '(z7c) read-only git prefixes' 0 "$LANE_EXIT"
+assert_report "$RESULT_FILE" complete-candidate none
+grep -F 'Bash(git status:*),Bash(git diff --stat:*)' "$FIXTURE_ROOT/argv-z7c.log" >/dev/null || {
+  printf 'FAIL: (z7c) expected both read-only git permissions in argv\n' >&2; cat "$FIXTURE_ROOT/argv-z7c.log" >&2; exit 1; }
+printf 'PASS: (z7) git prefixes: bare git and git commit refused, read-only git subcommands accepted\n'
+
+# (z8) D3, nested case: the runner checkout is a subdirectory of WORKDIR.
+OUTER_REPO=$FIXTURE_ROOT/outer-repo
+mkdir -p "$OUTER_REPO/nested/scripts"
+cp "$ROOT"/scripts/*.sh "$ROOT"/scripts/*.rb "$OUTER_REPO/nested/scripts/"
+chmod +x "$OUTER_REPO/nested/scripts/run-claude-lane.sh"
+git -C "$OUTER_REPO" init -q
+git -C "$OUTER_REPO" config user.name 'Claude Lane Contract'
+git -C "$OUTER_REPO" config user.email 'claude-lane@example.invalid'
+printf '%s\n' baseline > "$OUTER_REPO/tracked.txt"
+git -C "$OUTER_REPO" add tracked.txt nested
+git -C "$OUTER_REPO" commit -qm baseline
+Z8_RESULT=$FIXTURE_ROOT/result-z8
+Z8_EXIT=0
+env FAKE_LANE_MODE=available FAKE_LANE_ARGV_FILE="$FIXTURE_ROOT/argv-z8.log" \
+  FAKE_LANE_STDIN_FILE="$FIXTURE_ROOT/stdin-z8.log" \
+  PATH="$SHIM_DIR:/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin" \
+  "$OUTER_REPO/nested/scripts/run-claude-lane.sh" "$SPEC_FILE" sonnet "$OUTER_REPO" --model-map "$MODEL_MAP" \
+  > "$Z8_RESULT" 2>&1 || Z8_EXIT=$?
+[ "$Z8_EXIT" -eq 1 ] || { printf 'FAIL: (z8) nested runner checkout exited %s, expected 1\n' "$Z8_EXIT" >&2; cat "$Z8_RESULT" >&2; exit 1; }
+assert_report "$Z8_RESULT" unavailable GUARD_FAILED
+assert_reason_contains "$Z8_RESULT" 'inside WORKDIR'
+assert_no_argv_log '(z8) nested runner checkout' "$FIXTURE_ROOT/argv-z8.log"
+printf 'PASS: (z8) runner refuses to run from a checkout nested inside WORKDIR\n'
+
+# (z9) an option token is never consumed as another option's value.
+run_lane z9 available --effort --max-turns 5
+assert_exit '(z9) --effort followed by an option' 1 "$LANE_EXIT"
+assert_report "$RESULT_FILE" unavailable GUARD_FAILED
+assert_reason_contains "$RESULT_FILE" 'requires a value'
+assert_no_argv_log '(z9) --effort followed by an option' "$FIXTURE_ROOT/argv-z9.log"
+printf 'PASS: (z9) an option token is not accepted as a value -> unavailable/GUARD_FAILED\n'
