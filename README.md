@@ -220,12 +220,25 @@ taxonomy and human authority boundary apply. See
 
 ### Running the lane
 
-`scripts/run-claude-lane.sh`, `scripts/parse-lane-result.rb`, and
-`scripts/probe-model-map.sh` require `python3` and `ruby` on `PATH` and fail
-closed if either is missing; when a spec's own task is to edit these lane
-scripts, run the lane from a checkout other than the `WORKDIR` being edited,
-since a self-editing runner or parser could execute or parse a half-written
-version of itself mid-run.
+`scripts/run-claude-lane.sh` requires POSIX `sh`, `python3` (for the model-map
+validation) and `ruby` (for the two guards and the result parser) on `PATH`,
+and fails closed if either interpreter is missing. `scripts/probe-model-map.sh`
+requires `sh` and `python3` only, no `ruby`. `scripts/parse-lane-result.rb`,
+`scripts/worktree-delta.rb`, and `scripts/protected-paths.rb` require `ruby`
+only. `mktemp -t`, as used by the runner and the probe, targets both macOS and
+GNU `mktemp`.
+
+The runner refuses to run from inside `WORKDIR`: it compares the physical path
+of its own checkout against the physical path of `WORKDIR` and reports
+`unavailable`/`GUARD_FAILED` if they coincide or the checkout is nested inside
+`WORKDIR`, since a self-editing runner or parser could otherwise execute or
+parse a half-written version of itself mid-run. When a spec's own task is to
+edit these lane scripts, invoke the runner from a checkout other than the
+`WORKDIR` being edited.
+
+Shell-script execution (`sh`, `bash`, `zsh`) is not available inside this
+lane's own `--restricted` boundary; a spec whose verification is a shell test
+suite must say the architect runs it, not the implementer.
 
 ## Human authority boundary
 

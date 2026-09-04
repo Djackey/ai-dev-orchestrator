@@ -122,9 +122,11 @@ payload = {
     "probeCostUsd": total_cost,
 }
 
-with open(output_path, "w", encoding="utf-8") as f:
+tmp_path = output_path + ".tmp"
+with open(tmp_path, "w", encoding="utf-8") as f:
     json.dump(payload, f, indent=2, sort_keys=True)
     f.write("\n")
+os.replace(tmp_path, output_path)
 PY
 compose_exit=$?
 

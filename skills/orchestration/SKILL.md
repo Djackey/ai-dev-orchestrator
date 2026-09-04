@@ -268,12 +268,13 @@ independent, cross-family capability; this lane does not replace them. The
 same failure taxonomy and human authority boundary apply. See
 `${CLAUDE_PLUGIN_ROOT}/contracts/CLAUDE_LANE_CONTRACT.md`.
 
-`scripts/run-claude-lane.sh`, `scripts/parse-lane-result.rb`, and
-`scripts/probe-model-map.sh` require `python3` and `ruby` on `PATH` and fail
-closed if either is missing; when a spec's own task is to edit these lane
-scripts, run the lane from a checkout other than the `WORKDIR` being edited,
-since a self-editing runner or parser could execute or parse a half-written
-version of itself mid-run.
+`scripts/run-claude-lane.sh` requires `sh`, `python3` and `ruby` on `PATH`
+(`scripts/probe-model-map.sh` needs no `ruby`; the guards and the parser need
+only `ruby`) and fails closed if one is missing; the runner refuses to run from inside `WORKDIR`,
+so when a spec's own task is to edit these lane scripts, run the lane from a
+checkout other than the `WORKDIR` being edited, since a self-editing runner or
+parser could otherwise execute or parse a half-written version of itself
+mid-run.
 
 ## Failure taxonomy and escalation
 

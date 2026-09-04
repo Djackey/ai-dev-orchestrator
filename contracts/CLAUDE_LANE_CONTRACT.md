@@ -53,12 +53,24 @@ deny list, never an ambient-trust or fully open session:
   `--allow-dangerously-skip-permissions`, or `bypassPermissions`. A model or
   permission boundary that cannot be honored is `unavailable`, not silently
   downgraded.
+- `--allow-path` globs and `--allow-bash` prefixes are passed literally: the
+  runner disables its own shell's pathname expansion (`set -f`) around every
+  loop that iterates them, so a glob such as `scripts/**` is never expanded
+  against the runner's launch directory before the guard sees it. An
+  `--allow-bash` prefix containing any character outside
+  `[A-Za-z0-9_./ =-]` (including an empty prefix) is a usage error, not a
+  string concatenated unchecked into `--allowedTools`.
 
 ## The two guards
 
 Exactly as in the Codex lane contract, the lane brackets every invocation with
 two deterministic, out-of-process guards whose baselines live outside the
-workdir (`mktemp -t`):
+workdir (`mktemp -t`). Before any snapshot is taken, the runner compares the
+physical path (`pwd -P`) of its own checkout (`$ROOT`) against the physical
+path of `WORKDIR`: if the runner's own checkout is `WORKDIR` or lives inside
+it, the run is refused `unavailable`/`GUARD_FAILED` rather than risk the
+guard scripts or the post-run parser being edited mid-run by the very spec
+being executed.
 
 - `scripts/worktree-delta.rb` — a content baseline of tracked and
   nonignored-untracked files. Exit `0`/`STATUS: changed` proves a real task
@@ -162,11 +174,14 @@ a model's self-report. A failing verification, a partial diff, or a missing
 required file cannot be `complete-candidate` regardless of what this report
 says.
 
-This lane has no commit, merge, deploy, or Production authority. It never
-runs `git commit`, `git push`, or a deploy command itself, and cannot enable a
-Production feature flag or perform any other irreversible external action;
-those remain exclusively with `HUMAN_RELEASE_AUTHORITY`, exactly as in
+This lane is given no commit, merge, deploy, or Production authority, and the
+runner never runs `git commit`, `git push`, or a deploy command itself; those
+remain exclusively with `HUMAN_RELEASE_AUTHORITY`, exactly as in
 [`IMPLEMENTATION_LANE_CONTRACT.md`](IMPLEMENTATION_LANE_CONTRACT.md#evidence-and-acceptance).
+Whether an allowlisted Bash command could nonetheless reach a Production
+feature flag or some other irreversible external action is governed by the
+inherited-environment paragraph below and by the residual gaps, not by this
+sentence; the lane makes no claim that it "cannot" reach one.
 That is an authority boundary the lane's own invocation enforces, not a claim
 that the host environment is safe to run untrusted specs in: an allowlisted
 Bash command runs with whatever credentials, network access, and filesystem
@@ -211,6 +226,17 @@ environment.
   changed path within an allowed glob is never inspected for what it now
   contains. It is also only enforced when at least one `--allow-path` is
   passed — by default `SCOPE` is `unchecked`, not a passing check.
+- The model map file (`docs/model-map.json`, produced by
+  `scripts/probe-model-map.sh` in the architect's environment) and the
+  `claude` binary found on `PATH` are trusted inputs of the architect's
+  environment, not things the runner proves; a forged map or a PATH shim
+  would defeat model-identity evidence. The default model map path lives
+  under the runner's own checkout, which the runner now refuses to let be
+  `WORKDIR` or inside it (see "The two guards" above), so an implementer
+  working inside `WORKDIR` cannot alter the default map or the `claude`
+  binary found on `PATH`; that is the boundary this lane actually claims,
+  not a guarantee about an explicit `--model-map` path the caller chooses to
+  point inside `WORKDIR`.
 
 ## Calibration record
 

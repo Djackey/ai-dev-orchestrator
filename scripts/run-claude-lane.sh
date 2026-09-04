@@ -63,16 +63,27 @@ ALLOW_BASH_LIST=
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --effort) EFFORT=${2-}; shift 2 ;;
-    --max-turns) MAX_TURNS=${2-}; shift 2 ;;
-    --max-budget-usd) MAX_BUDGET_USD=${2-}; shift 2 ;;
-    --allow-bash) ALLOW_BASH_LIST="$ALLOW_BASH_LIST
-${2-}"; shift 2 ;;
+    --effort|--max-turns|--max-budget-usd|--allow-bash|--allow-path|--model-map)
+      [ $# -ge 2 ] || unavailable GUARD_FAILED "$1 requires a value"
+      ;;
+  esac
+  case "$1" in
+    --effort) EFFORT=$2; shift 2 ;;
+    --max-turns) MAX_TURNS=$2; shift 2 ;;
+    --max-budget-usd) MAX_BUDGET_USD=$2; shift 2 ;;
+    --allow-bash)
+      case "$2" in
+        *[!A-Za-z0-9_./=" "-]*|'')
+          unavailable GUARD_FAILED "--allow-bash prefix contains a character outside [A-Za-z0-9_./ =-]"
+          ;;
+      esac
+      ALLOW_BASH_LIST="$ALLOW_BASH_LIST
+$2"; shift 2 ;;
     --allow-path)
-      [ -n "${2-}" ] || unavailable GUARD_FAILED '--allow-path requires a non-empty glob'
+      [ -n "$2" ] || unavailable GUARD_FAILED '--allow-path requires a non-empty glob'
       ALLOW_PATH_LIST="$ALLOW_PATH_LIST
-${2-}"; shift 2 ;;
-    --model-map) MODEL_MAP_PATH=${2-}; shift 2 ;;
+$2"; shift 2 ;;
+    --model-map) MODEL_MAP_PATH=$2; shift 2 ;;
     *) unavailable GUARD_FAILED "unknown argument: $1" ;;
   esac
 done
@@ -207,6 +218,14 @@ WORKDIR=$(CDPATH= cd -- "$WORKDIR" && pwd)
 git -C "$WORKDIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || \
   unavailable GUARD_FAILED "WORKDIR is not inside a git repository: $WORKDIR"
 
+ROOT_PHYS=$(CDPATH= cd -- "$ROOT" && pwd -P)
+WORKDIR_PHYS=$(CDPATH= cd -- "$WORKDIR" && pwd -P)
+case "$ROOT_PHYS" in
+  "$WORKDIR_PHYS"|"$WORKDIR_PHYS"/*)
+    unavailable GUARD_FAILED "runner checkout $ROOT_PHYS is inside WORKDIR; run the lane from a separate checkout"
+    ;;
+esac
+
 # --- Guard snapshots (outside the workdir) --------------------------------
 
 DELTA_STATE=$(mktemp -t claude-lane-delta.XXXXXX)
@@ -264,10 +283,16 @@ if [ -n "$ALLOW_BASH_LIST" ]; then
   OLD_IFS=$IFS
   IFS='
 '
+  case $- in
+    *f*) BASH_NOGLOB_WAS_SET=1 ;;
+    *) BASH_NOGLOB_WAS_SET=0 ;;
+  esac
+  set -f
   for prefix in $ALLOW_BASH_LIST; do
     [ -n "$prefix" ] || continue
     ALLOWED_TOOLS="$ALLOWED_TOOLS,Bash($prefix:*)"
   done
+  [ "$BASH_NOGLOB_WAS_SET" -eq 1 ] || set +f
   IFS=$OLD_IFS
 fi
 
@@ -304,10 +329,16 @@ if [ -n "$ALLOW_PATH_LIST" ]; then
   OLD_IFS=$IFS
   IFS='
 '
+  case $- in
+    *f*) PATH_NOGLOB_WAS_SET=1 ;;
+    *) PATH_NOGLOB_WAS_SET=0 ;;
+  esac
+  set -f
   for glob in $ALLOW_PATH_LIST; do
     [ -n "$glob" ] || continue
     set -- "$@" "$glob"
   done
+  [ "$PATH_NOGLOB_WAS_SET" -eq 1 ] || set +f
   IFS=$OLD_IFS
 fi
 

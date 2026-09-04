@@ -205,6 +205,16 @@ executed, and a partially written parser could be asked to parse a contract
 it no longer matches. The same one-sentence rule is recorded in `README.md`
 under "Running the lane".
 
+O1b: In run5 (2026-09-05), the run that produced commit `cf99ece` (the
+clean-context round-2 fixes, calibration row 5), the allowlisted Bash prefixes `sh tests/` and
+`sh scripts/validate-contracts.sh` did not permit `sh tests/claude-lane-contract.sh`
+or `sh scripts/validate-contracts.sh` to run: the model reported every `sh`,
+`bash`, and `zsh` invocation denied (13 Bash boundary events, no Read/Edit/Write
+denial, no approval surface offered). Treat shell-script execution as
+unavailable inside this lane; a spec whose verification is a shell test suite
+must say the architect runs it, not the implementer. The same fact is recorded
+in one sentence in `README.md` under "Running the lane".
+
 O2: An account usage limit hit mid-run surfaces as `is_error: true` with
 model text "You've hit your session limit"; observed 2026-09-04 after 20
 turns and USD 1.22 of a longer run. The runner classified this

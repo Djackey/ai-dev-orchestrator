@@ -11,9 +11,11 @@ git -C "$REPO" init -q
 git -C "$REPO" config user.name 'Claude Lane Contract'
 git -C "$REPO" config user.email 'claude-lane@example.invalid'
 printf '%s\n' baseline > "$REPO/tracked.txt"
+mkdir -p "$REPO/src"
+printf '%s\n' baseline > "$REPO/src/tracked.txt"
 printf '%s\n' '.env' > "$REPO/.gitignore"
 printf '%s\n' 'API_KEY=baseline' > "$REPO/.env"
-git -C "$REPO" add tracked.txt .gitignore
+git -C "$REPO" add tracked.txt src/tracked.txt .gitignore
 git -C "$REPO" commit -qm baseline
 
 SPEC_FILE=$FIXTURE_ROOT/spec.txt
@@ -142,6 +144,14 @@ case "${FAKE_LANE_MODE-available}" in
   transport_boom_multiline)
     printf 'boom line one\nboom line two\n' >&2
     exit 7
+    ;;
+  src_edit)
+    printf 'edited\n' >> src/tracked.txt
+    printf '%s\n' '{"modelUsage":{"claude-sonnet-5":{}},"permission_denials":[],"is_error":false,"result":"done"}'
+    ;;
+  delete_tracked)
+    rm -f tracked.txt
+    printf '%s\n' '{"modelUsage":{"claude-sonnet-5":{}},"permission_denials":[],"is_error":false,"result":"done"}'
     ;;
 esac
 EOF
@@ -556,3 +566,107 @@ assert_exit '(y) multi-line stderr excerpt' 1 "$LANE_EXIT"
 assert_report "$RESULT_FILE" unavailable TRANSPORT_FAILED
 assert_reason_contains "$RESULT_FILE" 'boom line one boom line two'
 printf 'PASS: (y) multi-line stderr excerpt collapses to a single REASON line\n'
+
+# (z1) D1: --allow-path globs must never be pathname-expanded by the runner's
+# own shell against its launch cwd. The launch cwd contains a real decoy file
+# (src/decoy.txt) that would make 'src/**' expand to 'src/decoy.txt' if the
+# runner's for-loop did not disable globbing; the actual task change is
+# src/tracked.txt inside the fixture repo (WORKDIR), which is unrelated to the
+# launch cwd's contents.
+Z1_LAUNCH=$FIXTURE_ROOT/z1-launch
+mkdir -p "$Z1_LAUNCH/src"
+printf 'decoy\n' > "$Z1_LAUNCH/src/decoy.txt"
+Z1_RESULT=$FIXTURE_ROOT/result-z1
+Z1_EXIT=0
+(
+  cd "$Z1_LAUNCH" && \
+  env FAKE_LANE_MODE=src_edit FAKE_LANE_ARGV_FILE="$FIXTURE_ROOT/argv-z1.log" \
+    FAKE_LANE_STDIN_FILE="$FIXTURE_ROOT/stdin-z1.log" \
+    PATH="$SHIM_DIR:/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin" \
+    "$ROOT/scripts/run-claude-lane.sh" "$SPEC_FILE" sonnet "$REPO" --model-map "$MODEL_MAP" --allow-path 'src/**'
+) > "$Z1_RESULT" 2>&1 || Z1_EXIT=$?
+[ "$Z1_EXIT" -eq 0 ] || {
+  printf 'FAIL: (z1) expected exit 0, got %s\n' "$Z1_EXIT" >&2
+  cat "$Z1_RESULT" >&2
+  exit 1
+}
+assert_report "$Z1_RESULT" complete-candidate none
+grep -Fx 'SCOPE: ok (1 changed paths within 1 allowed globs)' "$Z1_RESULT" >/dev/null || {
+  printf 'FAIL: (z1) expected SCOPE: ok (1 changed paths within 1 allowed globs) in %s\n' "$Z1_RESULT" >&2
+  cat "$Z1_RESULT" >&2
+  exit 1
+}
+if grep -F 'SCOPE_VIOLATION' "$Z1_RESULT" >/dev/null; then
+  printf 'FAIL: (z1) SCOPE_VIOLATION found; --allow-path glob was pathname-expanded in the launch cwd\n' >&2
+  cat "$Z1_RESULT" >&2
+  exit 1
+fi
+printf 'PASS: (z1) --allow-path globs are passed literally, never expanded against the runner launch cwd\n'
+
+# (z2) D2: an --allow-bash prefix containing disallowed characters is a usage
+# error, and claude must never be invoked.
+run_lane z2 available --allow-bash 'x:*),Bash(curl'
+assert_exit '(z2) invalid --allow-bash prefix (parens/comma)' 1 "$LANE_EXIT"
+assert_report "$RESULT_FILE" unavailable GUARD_FAILED
+assert_reason_contains "$RESULT_FILE" '--allow-bash prefix'
+assert_no_argv_log '(z2) invalid --allow-bash prefix' "$FIXTURE_ROOT/argv-z2.log"
+printf 'PASS: (z2) --allow-bash prefix with disallowed characters -> unavailable/GUARD_FAILED, claude never invoked\n'
+
+# (z3) D2: an empty --allow-bash prefix is the same usage error.
+run_lane z3 available --allow-bash ''
+assert_exit '(z3) empty --allow-bash prefix' 1 "$LANE_EXIT"
+assert_report "$RESULT_FILE" unavailable GUARD_FAILED
+assert_reason_contains "$RESULT_FILE" '--allow-bash prefix'
+assert_no_argv_log '(z3) empty --allow-bash prefix' "$FIXTURE_ROOT/argv-z3.log"
+printf 'PASS: (z3) --allow-bash with an empty prefix -> unavailable/GUARD_FAILED, claude never invoked\n'
+
+# (z4) D3: the runner refuses to run from a checkout inside the WORKDIR it is
+# operating on, even when the model map is explicitly valid.
+INNER_REPO=$FIXTURE_ROOT/inner-repo
+mkdir -p "$INNER_REPO/scripts"
+cp "$ROOT"/scripts/*.sh "$ROOT"/scripts/*.rb "$INNER_REPO/scripts/"
+chmod +x "$INNER_REPO/scripts/run-claude-lane.sh" "$INNER_REPO/scripts/probe-model-map.sh"
+git -C "$INNER_REPO" init -q
+git -C "$INNER_REPO" config user.name 'Claude Lane Contract'
+git -C "$INNER_REPO" config user.email 'claude-lane@example.invalid'
+printf '%s\n' baseline > "$INNER_REPO/tracked.txt"
+git -C "$INNER_REPO" add tracked.txt scripts
+git -C "$INNER_REPO" commit -qm baseline
+
+Z4_RESULT=$FIXTURE_ROOT/result-z4
+Z4_EXIT=0
+env FAKE_LANE_MODE=available FAKE_LANE_ARGV_FILE="$FIXTURE_ROOT/argv-z4.log" \
+  FAKE_LANE_STDIN_FILE="$FIXTURE_ROOT/stdin-z4.log" \
+  PATH="$SHIM_DIR:/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin" \
+  "$INNER_REPO/scripts/run-claude-lane.sh" "$SPEC_FILE" sonnet "$INNER_REPO" --model-map "$MODEL_MAP" \
+  > "$Z4_RESULT" 2>&1 || Z4_EXIT=$?
+[ "$Z4_EXIT" -eq 1 ] || {
+  printf 'FAIL: (z4) runner-checkout-inside-WORKDIR exited %s, expected 1\n' "$Z4_EXIT" >&2
+  cat "$Z4_RESULT" >&2
+  exit 1
+}
+assert_report "$Z4_RESULT" unavailable GUARD_FAILED
+assert_reason_contains "$Z4_RESULT" 'inside WORKDIR'
+assert_no_argv_log '(z4) runner checkout inside WORKDIR' "$FIXTURE_ROOT/argv-z4.log"
+printf 'PASS: (z4) runner refuses to run from a checkout inside WORKDIR\n'
+
+# (z5) D6: worktree-delta scope checking must see deletions, not just
+# modifications and additions.
+run_lane z5 delete_tracked --allow-path 'tracked.txt'
+assert_exit '(z5) deleted tracked file within allowed glob' 0 "$LANE_EXIT"
+assert_report "$RESULT_FILE" complete-candidate none
+grep -Fx 'SCOPE: ok (1 changed paths within 1 allowed globs)' "$RESULT_FILE" >/dev/null || {
+  printf 'FAIL: (z5) expected SCOPE: ok (1 changed paths within 1 allowed globs) in %s\n' "$RESULT_FILE" >&2
+  cat "$RESULT_FILE" >&2
+  exit 1
+}
+printf 'PASS: (z5) worktree-delta scope checking sees a deletion within an allowed --allow-path glob\n'
+
+# (z6) D8: an option requiring a value as the last argument is a usage error,
+# not a shift past the end of the argument list.
+run_lane z6 available --effort
+assert_exit '(z6) --effort missing value' 1 "$LANE_EXIT"
+assert_report "$RESULT_FILE" unavailable GUARD_FAILED
+assert_reason_contains "$RESULT_FILE" 'requires a value'
+assert_no_argv_log '(z6) --effort missing value' "$FIXTURE_ROOT/argv-z6.log"
+printf 'PASS: (z6) --effort as the last argument -> unavailable/GUARD_FAILED, claude never invoked\n'
