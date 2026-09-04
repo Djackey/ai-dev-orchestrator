@@ -78,14 +78,30 @@ while [ $# -gt 0 ]; do
           unavailable GUARD_FAILED "--allow-bash prefix contains a character outside [A-Za-z0-9_./ =-]"
           ;;
       esac
-      # A git prefix may only grant read-only subcommands: the lane's authority
-      # boundary (no commit, merge, push) is enforced here, not by convention.
+      # The first token must be a bare program name (no path, no wrapper):
+      # this catches the literal forms an architect is likely to type by
+      # mistake, and is not a sandbox (see the contract's residual gaps).
       case "$2" in
-        git|git" "*)
-          case "$2" in
-            "git status"|"git status "*|"git diff"|"git diff "*|"git log"|"git log "*|\
-            "git show"|"git show "*|"git ls-files"|"git ls-files "*|"git rev-parse"|"git rev-parse "*|\
-            "git blame"|"git blame "*|"git grep"|"git grep "*) ;;
+        " "*|*" ") unavailable GUARD_FAILED "--allow-bash prefix must not start or end with a space: $2" ;;
+      esac
+      FIRST_TOKEN=${2%% *}
+      case "$FIRST_TOKEN" in
+        */*) unavailable GUARD_FAILED "--allow-bash prefix must start with a bare program name, not a path: $2" ;;
+        *=*) unavailable GUARD_FAILED "--allow-bash prefix must not start with an environment assignment: $2" ;;
+        command|env|exec|eval|builtin|nohup|xargs|sudo|doas|time|nice|caffeinate)
+          unavailable GUARD_FAILED "--allow-bash prefix must name the program directly, not through a wrapper such as $FIRST_TOKEN: $2" ;;
+      esac
+      # A git prefix may only grant subcommands that do not write refs, the
+      # index or the worktree by default (commit, merge, push, checkout... are
+      # refused). Matched case-insensitively: on a case-insensitive filesystem
+      # GIT resolves to git. Trailing arguments are not inspected.
+      case "$FIRST_TOKEN" in
+        [Gg][Ii][Tt])
+          GIT_REST=${2#"$FIRST_TOKEN"}
+          case "$GIT_REST" in
+            " status"|" status "*|" diff"|" diff "*|" log"|" log "*|\
+            " show"|" show "*|" ls-files"|" ls-files "*|" rev-parse"|" rev-parse "*|\
+            " blame"|" blame "*|" grep"|" grep "*) ;;
             *) unavailable GUARD_FAILED "--allow-bash git prefix must name a read-only subcommand (status, diff, log, show, ls-files, rev-parse, blame, grep): $2" ;;
           esac
           ;;

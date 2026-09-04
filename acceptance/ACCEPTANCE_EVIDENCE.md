@@ -587,7 +587,16 @@ and README wording — with cases (z7)–(z9), and re-ran
 `tests/claude-lane-contract.sh` and `scripts/validate-contracts.sh`. The
 provenance of the model map and of `claude` on `PATH` stays an accepted
 residual gap: the architect's own environment is trusted by design, and the
-lane's claim is only that the implementer cannot alter it.
+lane's claim is only that the implementer cannot alter it. A fourth, scoped
+Codex review (of `d0f7f32`) then showed the git rule was still bypassable by
+a path (`/opt/homebrew/bin/git commit`), a wrapper (`command`, `env`), a
+different letter case, or trailing arguments (`git diff --output=<file>`),
+and that the probe's `mkstemp` narrowed an existing `0644` map to `0600`.
+The architect refused the literal path/wrapper/assignment/case forms (case
+(z10)), preserved the map's mode, and rewrote the contract and README so the
+rule is described as a lint on the typed prefix with trailing arguments and
+same-named programs recorded as a residual gap, rather than as an enforced
+boundary.
 
 Rows 5 and 6 above are, like rows 1 and 3/4, the lane fixing itself, not new
 calibration data points; they do not change the 3-spec count or arithmetic in

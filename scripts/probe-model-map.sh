@@ -126,6 +126,15 @@ payload = {
 out_dir = os.path.dirname(os.path.abspath(output_path))
 fd, tmp_path = tempfile.mkstemp(prefix=os.path.basename(output_path) + ".", suffix=".tmp", dir=out_dir)
 try:
+    # mkstemp creates 0600; keep the mode the map already has (or the umask
+    # default for a new file) so an atomic replace does not narrow it.
+    try:
+        mode = os.stat(output_path).st_mode & 0o777
+    except FileNotFoundError:
+        umask = os.umask(0)
+        os.umask(umask)
+        mode = 0o666 & ~umask
+    os.chmod(tmp_path, mode)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, sort_keys=True)
         f.write("\n")

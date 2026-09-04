@@ -59,12 +59,19 @@ deny list, never an ambient-trust or fully open session:
   against the runner's launch directory before the guard sees it. An
   `--allow-bash` prefix containing any character outside
   `[A-Za-z0-9_./ =-]` (including an empty prefix) is a usage error, not a
-  string concatenated unchecked into `--allowedTools`. A prefix that begins
-  with `git` must name a read-only subcommand (`status`, `diff`, `log`,
-  `show`, `ls-files`, `rev-parse`, `blame`, `grep`); a bare `git`, `git
-  commit`, `git push` or any other subcommand is refused
-  `unavailable`/`GUARD_FAILED` before `claude` runs, so the runner never
-  emits a permission through which the lane could commit, merge or push.
+  string concatenated unchecked into `--allowedTools`. A prefix must start
+  with a bare program name: a path (`/opt/homebrew/bin/git`), a wrapper
+  (`command`, `env`, `exec`, `eval`, `builtin`, `nohup`, `xargs`, `sudo`,
+  `doas`, `time`, `nice`, `caffeinate`), a leading environment assignment,
+  or a leading or trailing space is refused. A prefix whose first token is
+  `git` in any letter case must name a subcommand that does not write refs,
+  the index or the worktree by default (`status`, `diff`, `log`, `show`,
+  `ls-files`, `rev-parse`, `blame`, `grep`); a bare `git`, `git commit`,
+  `git push` or any other subcommand is refused `unavailable`/`GUARD_FAILED`
+  before `claude` runs. These checks are a lint on the literal prefix text
+  the architect types, not a sandbox: they do not inspect trailing
+  arguments, and they cannot know what a program of another name does (see
+  the residual gaps).
 
 ## The two guards
 
@@ -187,10 +194,10 @@ Whether an allowlisted Bash command could nonetheless reach a Production
 feature flag or some other irreversible external action is governed by the
 inherited-environment paragraph below and by the residual gaps, not by this
 sentence; the lane makes no claim that it "cannot" reach one.
-The runner enforces that boundary for `git` (see the invocation boundary
-above: no `--allow-bash` prefix can grant a writing git subcommand) and for
-nothing else; it is not a claim that the host environment is safe to run
-untrusted specs in: an allowlisted
+The runner lints `--allow-bash` prefixes for the literal forms that would
+hand the lane a writing git subcommand (see the invocation boundary above)
+and for nothing else; that lint is not a sandbox, and this is not a claim
+that the host environment is safe to run untrusted specs in: an allowlisted
 Bash command runs with whatever credentials, network access, and filesystem
 visibility the host process already has, and nothing here strips those. The
 absence of commit/merge/deploy authority is a residual gap, not a guarantee,
@@ -210,6 +217,15 @@ environment.
   prompts that would have needed approval do. The deterministic
   `protected-paths.rb` check is therefore the load-bearing evidence for
   protected local state.
+- The `--allow-bash` git rule inspects only the prefix's first two tokens.
+  It does not see trailing arguments (`Bash(git diff:*)` still lets the
+  lane run `git diff --output=<file>`, which writes a file), it cannot tell
+  that a program of another name (`gitx`, a wrapper script on `PATH`) is
+  git, and it does nothing for interpreter prefixes such as `ruby` or
+  `python3`, which can run arbitrary code. Every `--allow-bash` prefix is a
+  grant the architect makes deliberately; what such a command then writes is
+  detected after the fact by the worktree and protected-paths guards, not
+  prevented.
 - An allowlist prefix such as `Bash(pnpm test:*)` is matched after leading
   environment assignments are stripped, so `LANG=C pnpm test` is accepted;
   the prefix still cannot be used to run a different program.

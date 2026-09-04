@@ -721,3 +721,20 @@ assert_report "$RESULT_FILE" unavailable GUARD_FAILED
 assert_reason_contains "$RESULT_FILE" 'requires a value'
 assert_no_argv_log '(z9) --effort followed by an option' "$FIXTURE_ROOT/argv-z9.log"
 printf 'PASS: (z9) an option token is not accepted as a value -> unavailable/GUARD_FAILED\n'
+
+# (z10) the git rule cannot be sidestepped by the literal forms the guard is
+# meant to catch: a path to git, a wrapper in front of it, an environment
+# assignment in front of it, a leading space, or a different case.
+for z10_prefix in '/opt/homebrew/bin/git commit' 'command git push' 'env git commit' \
+  'X=1 git commit' ' git commit' 'GIT push' 'nohup git push'; do
+  run_lane z10 available --allow-bash "$z10_prefix"
+  assert_exit "(z10) prefix '$z10_prefix'" 1 "$LANE_EXIT"
+  assert_report "$RESULT_FILE" unavailable GUARD_FAILED
+  assert_no_argv_log "(z10) prefix '$z10_prefix'" "$FIXTURE_ROOT/argv-z10.log"
+done
+run_lane z10b available --allow-bash 'GIT log'
+assert_exit '(z10b) GIT log' 0 "$LANE_EXIT"
+assert_report "$RESULT_FILE" complete-candidate none
+grep -F 'Bash(GIT log:*)' "$FIXTURE_ROOT/argv-z10b.log" >/dev/null || {
+  printf 'FAIL: (z10b) expected Bash(GIT log:*) in argv\n' >&2; cat "$FIXTURE_ROOT/argv-z10b.log" >&2; exit 1; }
+printf 'PASS: (z10) git via path, wrapper, env assignment, leading space or GIT refused; GIT log accepted\n'

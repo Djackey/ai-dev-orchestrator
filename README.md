@@ -236,10 +236,12 @@ parse a half-written version of itself mid-run. When a spec's own task is to
 edit these lane scripts, invoke the runner from a checkout other than the
 `WORKDIR` being edited.
 
-`--allow-bash` prefixes are charset-checked, and a `git` prefix must name a
-read-only subcommand (`status`, `diff`, `log`, `show`, `ls-files`,
-`rev-parse`, `blame`, `grep`): the runner refuses to emit a permission through
-which the lane could commit, merge or push.
+`--allow-bash` prefixes are charset-checked, must start with a bare program
+name (no path, wrapper or environment assignment), and a `git` prefix must
+name a read-only subcommand (`status`, `diff`, `log`, `show`, `ls-files`,
+`rev-parse`, `blame`, `grep`). This is a lint on what the architect types,
+not a sandbox: trailing arguments and programs of other names are not
+inspected (see the contract's residual gaps).
 
 Shell-script execution (`sh`, `bash`, `zsh`) is not available inside this
 lane's own `--restricted` boundary; a spec whose verification is a shell test
