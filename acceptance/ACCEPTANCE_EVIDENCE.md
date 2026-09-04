@@ -556,15 +556,34 @@ on every later PR; never a long-term capability proof.
 
 | # | Task | Repository | Model / effort | Turns | Cost (USD) | Boundary events | Guards | Architect verification | Outcome |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Implement the Claude lane itself (runner, parser, probe, contract test, docs) | this repository | `claude-sonnet-5` / xhigh | 55 | 3.15 | 7 Bash denials (environment probing such as `which`, `ls /usr/bin`, a direct `validate-frontmatter.rb` call) | worktree delta changed; protected state unchanged | 11/11 lane contract cases; full contract validation passed under a UTF-8 locale; a pre-existing locale defect in `validate-frontmatter.rb` surfaced | accepted with two FIX_FIRST items (calibration sentence written in the past tense; residual gaps unrecorded), dispatched as task 2 |
-| 2 | Lane follow-up: calibration wording, residual-gaps section, locale-independent frontmatter validation, `--tools ""` on the probe | this repository | `claude-sonnet-5` / medium | 18 | 0.67 | 0 | delta changed; protected unchanged | re-run with LANG, LC_ALL and LC_CTYPE unset: 11/11 lane cases, 103 contract validations passed | accepted |
-| 3 | A product painted-door feature (an analytics-only chip row plus a vitest suite) in the downstream product repository | downstream product repository | `claude-sonnet-5` / high | 35 | 1.76 | 0 | delta changed; protected unchanged | lint (tsc) 0; targeted suites 188 tests; full suite 1984 tests | accepted |
+| 1 | Lane follow-up: calibration wording, residual-gaps section, locale-independent frontmatter validation, `--tools ""` on the probe | this repository | `claude-sonnet-5` / medium | 18 | 0.67 | 0 | delta changed; protected unchanged | re-run with LANG, LC_ALL and LC_CTYPE unset: 11/11 lane cases, 103 contract validations passed | accepted |
+| 2 | A product painted-door feature (an analytics-only chip row plus a vitest suite) in the downstream product repository | downstream product repository | `claude-sonnet-5` / high | 35 | 1.76 | 0 | delta changed; protected unchanged | lint (tsc) 0; targeted suites 188 tests; full suite 1984 tests | accepted |
+| 3 | Claude lane — review fixes (cross-family and clean-context FIX_FIRST items), first attempt | this repository | `claude-sonnet-5` / high | 20 | 1.22 | 0 | delta changed; protected unchanged | not applicable — the run did not finish | `is_error: true`, model text "You've hit your session limit"; classified `unavailable`/`TRANSPORT_FAILED` (see the operating observation in `docs/CAPABILITY_AUDIT.md`); the worktree carried a real partial diff that a later session inspected and completed |
+| 4 | Claude lane — review fixes (cross-family and clean-context FIX_FIRST items), continuation of row 3 from the partial diff | this repository | `claude-sonnet-5` / high | 66 | 3.97 | 2 Bash denials (boundary events, neither a Read/Edit/Write) | delta changed; protected unchanged | architect re-ran `tests/claude-lane-contract.sh` (20/20) and `scripts/validate-contracts.sh` under a UTF-8 locale and with LANG, LC_ALL and LC_CTYPE unset (both passed), read the full diff, and then ran the rewritten runner end to end on the real CLI with `claude-haiku-4-5-20251001` against a throwaway git directory: `--allow-path 'src/**'` → `complete-candidate`, `SCOPE: ok (1 changed paths within 1 allowed globs)`, USD 0.03; `--allow-path 'docs/**'` on the same spec → `refused`/`SCOPE_VIOLATION` naming `src/a.txt`, exit 3, USD 0.01; both reports carried `EXPECTED_CANONICAL ... (model map 2026-09-04T11:59:56Z, claude 2.1.260 (Claude Code))` and a matching `RESOLVED_MODEL_EVIDENCE` | accepted |
 
-Result: 3 of 3 `complete-candidate` results accepted → **`claude-sonnet-5` is
-the provisional default implementer as of 2026-09-04.** Task 1 was invoked by
-the architect hand-bracketing the same restricted invocation and the same two
-guards before `run-claude-lane.sh` existed; tasks 2 and 3 ran through
-`run-claude-lane.sh` itself.
+Result: of the first three runner-executed specs, 3 of 3 that actually
+completed reached `complete-candidate` and were accepted → **`claude-sonnet-5`
+is the provisional default implementer as of 2026-09-04.** Row 3's session
+limit was a transport failure, not a rejection of capability, and is excluded
+from that 3-of-3 count rather than counted against it. Limitation on this
+calibration: 2 of these 4 rows are the lane documenting or fixing itself
+(rows 1 and 3/4), not independent third-party tasks; the calibration is
+provisional in part for that reason, and row 2 (an unrelated downstream
+product task) is the strongest single data point.
+
+Not counted: bootstrap. Before `run-claude-lane.sh` existed, the architect
+hand-bracketed the same restricted `claude -p --restricted` invocation and the
+same two guards to have Claude implement the lane itself (runner, parser,
+probe, contract test, docs): `claude-sonnet-5` / xhigh, 55 turns, USD 3.15, 7
+Bash denials (environment probing such as `which`, `ls /usr/bin`, a direct
+`validate-frontmatter.rb` call), delta changed, protected state unchanged;
+11/11 lane contract cases and full contract validation passed under a UTF-8
+locale, and a pre-existing locale defect in `validate-frontmatter.rb`
+surfaced. It was accepted with two FIX_FIRST items (calibration sentence
+written in the past tense; residual gaps unrecorded), which became row 1
+above. This task is not counted toward the calibration rule because no runner
+existed yet to invoke it against — it is the reason the runner was built, not
+a data point about the runner.
 
 Escalation lane evidence (not part of the calibration): one frontier task in
 the downstream product repository ran on `claude-opus-5` / xhigh through the

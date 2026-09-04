@@ -167,3 +167,50 @@ mutation must go through the Edit/Write tools where the deny list applies.
 <script>` runs arbitrary repository code — so an architect who allows it
 accepts that the implementer can execute code it wrote; the worktree-delta
 guard still reports every resulting file change.
+
+## Claude lane boundary probes — 2026-09-04 (settings, MCP, stdin)
+
+Probes on `claude-haiku-4-5-20251001` (model chosen to keep probe cost low;
+haiku, ≈USD 0.05 total across the probes below):
+
+- `--restricted` with `permissions.allow` containing `Bash(python3:*)` did
+  NOT permit a `python3` invocation, checked across 3/3 repeated runs: the
+  command was still denied and appeared in `permission_denials`. An `allow`
+  entry in `--settings` does not override `--restricted`'s own tool gate.
+- `echo PROBE_OK` ran successfully with no allowlist entry for it at all, and
+  with no corresponding denial in `permission_denials` — Claude treats its
+  own built-in read-only shell commands as always-approved (see the residual
+  gap recorded in the contract).
+- `--strict-mcp-config` was accepted together with `--setting-sources ""`;
+  neither flag caused a transport error, and no MCP server configuration was
+  discovered or loaded.
+- The `--settings` deny of `./.env` held: a `Write` to `./.env` was refused
+  with "File is in a directory that is denied by your permission settings"
+  and the file was unchanged on disk, consistent with the earlier `--settings`
+  probe above.
+- Piping the prompt on stdin (`claude -p --restricted ... < spec.txt`, no
+  positional prompt argument) worked exactly as passing the same text as an
+  argument did in earlier probes; the model received and acted on the full
+  spec text.
+
+### Operating observations
+
+O1: When a spec's own instructions are to edit the lane's scripts
+(`scripts/run-claude-lane.sh`, `scripts/parse-lane-result.rb`, etc.), the
+runner must be invoked from a checkout that is NOT the `WORKDIR` being edited.
+`sh` reads a script incrementally as it executes, and the guard/parser
+invocation happens after the model process exits; if the running script were
+also the file being rewritten mid-run, a partially written script could be
+executed, and a partially written parser could be asked to parse a contract
+it no longer matches. The same one-sentence rule is recorded in `README.md`
+under "Running the lane".
+
+O2: An account usage limit hit mid-run surfaces as `is_error: true` with
+model text "You've hit your session limit"; observed 2026-09-04 after 20
+turns and USD 1.22 of a longer run. The runner classified this
+`unavailable`/`TRANSPORT_FAILED` with `WORKTREE_DELTA: changed` — the
+classification was correct (a real transport failure, not a boundary event),
+but the worktree was left with a real partial diff from the turns that did
+complete. The operator must inspect that partial diff by hand before
+re-dispatching the spec; the runner has no way to know whether the partial
+work is safe to keep, discard, or resume from.

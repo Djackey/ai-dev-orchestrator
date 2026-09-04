@@ -13,6 +13,12 @@ authority boundary; this document only covers what differs about invoking
 The lane invokes `claude -p --restricted` with an explicit tool allowlist and a
 deny list, never an ambient-trust or fully open session:
 
+- The spec text is piped in on stdin (`< "$SPEC_FILE"`), never passed as a
+  command-line argument, so it cannot be truncated by an argv length limit and
+  never appears in a process listing.
+- `--strict-mcp-config` is always passed alongside `--restricted`, so no
+  ambient or project-discovered MCP server configuration is picked up; the
+  lane never passes `--mcp-config`.
 - `--tools "Read,Edit,Write,Grep,Glob,Bash"` names the tool surface that can
   even be attempted. `--allowedTools` is narrower: it always includes
   `Read,Edit,Write,Grep,Glob`, and only adds `Bash(PREFIX:*)` entries when the
@@ -22,20 +28,25 @@ deny list, never an ambient-trust or fully open session:
   unavailable tool.
 - `--settings` carries a single JSON `permissions.deny` list built
   programmatically (never by string concatenation of untrusted text) from the
-  protected-path patterns: `./.env`, `./.env.*`,
-  `./.claude/settings.local.json`, `./.codex/**`, `./.npmrc`, `./.git/**`, plus
-  every project-declared pattern in `.ai-orchestrator-protected-paths`. Each
-  pattern is denied for `Read`, `Edit`, and `Write`.
+  protected-path patterns: `./.env`, `./.env.*`, `./.claude/**`,
+  `./.codex/**`, `./.npmrc`, `./.git/**`, plus every project-declared pattern
+  in `.ai-orchestrator-protected-paths`. Each pattern is denied for `Read`,
+  `Edit`, and `Write`. `./.claude/**` denies the whole directory, not just
+  `settings.local.json`, so a spec cannot escape the deny list by writing a
+  new file under `.claude/`.
 - `--permission-mode acceptEdits --permission-prompts none` runs unattended;
   there is no human in the loop to approve a prompt.
+- An optional, repeatable `--allow-path GLOB` restricts which changed paths
+  are acceptable. Globs are relative to `WORKDIR` and matched with fnmatch
+  semantics where `*` and `**` both cross `/` (there is no `FNM_PATHNAME`
+  distinction). When at least one `--allow-path` is given and a changed path
+  matches none of them, the run is `refused`/`SCOPE_VIOLATION`. When none is
+  given, the report says `SCOPE: unchecked (no --allow-path given)` — the lane
+  makes no scope claim by default.
 - The lane never passes `--fallback-model`, `--dangerously-skip-permissions`,
   `--allow-dangerously-skip-permissions`, or `bypassPermissions`. A model or
   permission boundary that cannot be honored is `unavailable`, not silently
   downgraded.
-- NETWORK: bounded by the Bash allowlist only (permission layer, not an OS
-  sandbox). Claude's `--restricted` mode is a tool-permission boundary, not a
-  network or filesystem sandbox; the deterministic guards below are the actual
-  enforcement for file-scope violations.
 
 ## The two guards
 
@@ -54,32 +65,44 @@ workdir (`mktemp -t`):
   `PROTECTED_STATE_VIOLATION`. Any other exit is a guard failure.
 
 These two scripts, and their meaning, are identical to the Codex lane; this
-lane does not fork or relax them.
+lane does not fork or relax them. `--allow-path` (see above) is a third,
+optional check layered on top of `worktree-delta`'s own changed-path list: it
+narrows which changed paths are acceptable, not whether a change happened at
+all. None of `worktree-delta.rb`, `protected-paths.rb`, or `--allow-path` is
+an OS sandbox — they are deterministic, out-of-process checks of what the
+worktree looked like before and after, not a boundary that prevents an
+allowlisted Bash command from reading or writing anything the OS permits.
 
 ## Classification
 
-`scripts/parse-lane-result.rb` classifies the captured JSON plus the two guard
-exit codes, in this fixed order (first match wins):
+`scripts/parse-lane-result.rb` classifies the two guard exit codes and the
+captured JSON, in this fixed order (first match wins). The guard exit codes
+are checked first because they are independent of, and more trustworthy than,
+whatever the captured JSON claims:
 
 | Order | Condition | STATUS | CLASSIFICATION |
 |---|---|---|---|
-| 1 | captured JSON unreadable / not an object | `unavailable` | `OUTPUT_NOT_CAPTURED` |
-| 2 | `modelUsage` missing or not an object | `unavailable` | `MODEL_UNRESOLVED` |
-| 3 | `modelUsage` has 0 keys | `unavailable` | `MODEL_UNRESOLVED` |
-| 3 | `modelUsage` has more than 1 key | `unavailable` | `MULTI_MODEL` |
-| 4 | the single `modelUsage` key is not the expected canonical model | `unavailable` | `MODEL_UNRESOLVED` |
-| 5 | protected-paths guard exit is `4` | `refused` | `PROTECTED_STATE_VIOLATION` |
-| 6 | either guard exited outside `{0,4}` / `{0,3}` | `unavailable` | `GUARD_FAILED` |
-| 7 | `subtype == "error_max_budget_usd"` | `partial` | `BUDGET_EXCEEDED` |
-| 8 | `subtype == "error_max_turns"` | `partial` | `TURNS_EXCEEDED` |
-| 9 | `is_error` true or the `claude` exit is non-zero | `unavailable` | `TRANSPORT_FAILED` |
-| 10 | worktree-delta guard exit is `3` (empty) | `refused` | `EMPTY_DELTA` |
-| 11 | `permission_denials` present but not an array | `unavailable` | `OUTPUT_NOT_CAPTURED` |
-| 12 | any denial's `tool_name` is `Read`, `Edit`, or `Write` | `partial` | `TOOL_PERMISSION_FAILURE` |
-| 13 | otherwise | `complete-candidate` | `none` |
+| 1 | protected-paths guard exit is `4`, even if the JSON is missing or malformed | `refused` | `PROTECTED_STATE_VIOLATION` |
+| 2 | either guard exited outside `{0,4}` / `{0,3}` | `unavailable` | `GUARD_FAILED` |
+| 3 | captured JSON unreadable / not an object, and the `claude` exit is non-zero | `unavailable` | `TRANSPORT_FAILED` |
+| 4 | captured JSON unreadable / not an object, and the `claude` exit is zero | `unavailable` | `OUTPUT_NOT_CAPTURED` |
+| 5 | `modelUsage` missing or not an object | `unavailable` | `MODEL_UNRESOLVED` |
+| 6 | `modelUsage` has 0 keys | `unavailable` | `MODEL_UNRESOLVED` |
+| 7 | `modelUsage` has more than 1 key | `unavailable` | `MULTI_MODEL` |
+| 8 | the single `modelUsage` key is not the expected canonical model | `unavailable` | `MODEL_UNRESOLVED` |
+| 9 | `subtype == "error_max_budget_usd"` | `partial` | `BUDGET_EXCEEDED` |
+| 10 | `subtype == "error_max_turns"` | `partial` | `TURNS_EXCEEDED` |
+| 11 | `is_error` true or the `claude` exit is non-zero | `unavailable` | `TRANSPORT_FAILED` |
+| 12 | worktree-delta guard exit is `3` (empty) | `refused` | `EMPTY_DELTA` |
+| 13 | a changed path matches none of the declared `--allow-path` globs | `refused` | `SCOPE_VIOLATION` |
+| 14 | `permission_denials` present but not an array, or containing an entry that is not an object with a string `tool_name` | `unavailable` | `OUTPUT_NOT_CAPTURED` |
+| 15 | any denial's `tool_name` is `Read`, `Edit`, or `Write` | `partial` | `TOOL_PERMISSION_FAILURE` |
+| 16 | otherwise | `complete-candidate` | `none` |
 
-Rule 10 overrides what would otherwise read as a successful subtype: an exit
-of zero with no worktree delta is never `complete-candidate`. A `Bash`-only
+Rule 12 overrides what would otherwise read as a successful subtype: an exit
+of zero with no worktree delta is never `complete-candidate`. Rule 13 is only
+ever reached when at least one `--allow-path` was given; with none given,
+`SCOPE` is reported as `unchecked` and this rule cannot fire. A `Bash`-only
 denial is reported in `BOUNDARY_EVENTS` but, by itself, never fails the run —
 only a denied `Read`, `Edit`, or `Write` does.
 
@@ -88,25 +111,32 @@ to a canonical model id (`claude-sonnet-5`, `claude-opus-5`, ...) comes only
 from `docs/model-map.json`, produced by `scripts/probe-model-map.sh`. That
 mapping is never hardcoded in the parser: `scripts/parse-lane-result.rb`
 receives `EXPECTED_CANONICAL` as an argument from the caller and never invents
-or assumes a canonical id itself. `run-claude-lane.sh` also refuses a model map
-whose `generatedAt` is more than 30 days old, reporting `unavailable` /
-`MAPPING_STALE` rather than trusting a stale probe.
+or assumes a canonical id itself. `run-claude-lane.sh` validates the model map
+before ever invoking `claude` and reports `unavailable` rather than trusting a
+bad probe: a canonical that is not a string matching `^claude-[a-z0-9.-]+$` is
+`MODEL_UNRESOLVED`; a `generatedAt` more than 30 days old or dated in the
+future is `MAPPING_STALE`; and a `claudeVersion` in the map that does not
+exactly match the output of the running `claude --version` is also
+`MAPPING_STALE`, since a probe taken against a different CLI build cannot be
+trusted for the running one.
 
 ## Report
 
 ```text
 IMPLEMENTATION REPORT
 LANE: claude
-REQUESTED_MODEL: <EXPECTED_CANONICAL>
+REQUESTED_ALIAS: <alias, e.g. sonnet>
+EXPECTED_CANONICAL: <canonical model id> (model map <generatedAt>, claude <claudeVersion>)
 RESOLVED_MODEL_EVIDENCE: <the single modelUsage key, or "unavailable">
 STATUS: complete-candidate | partial | refused | unavailable
-CLASSIFICATION: none | MODEL_UNRESOLVED | MULTI_MODEL | OUTPUT_NOT_CAPTURED | TRANSPORT_FAILED | BUDGET_EXCEEDED | TURNS_EXCEEDED | EMPTY_DELTA | PROTECTED_STATE_VIOLATION | GUARD_FAILED | TOOL_PERMISSION_FAILURE
+CLASSIFICATION: none | MODEL_UNRESOLVED | MULTI_MODEL | OUTPUT_NOT_CAPTURED | TRANSPORT_FAILED | BUDGET_EXCEEDED | TURNS_EXCEEDED | EMPTY_DELTA | PROTECTED_STATE_VIOLATION | GUARD_FAILED | TOOL_PERMISSION_FAILURE | SCOPE_VIOLATION | MAPPING_STALE
 REASON: <one line or none>
 COST_USD: <total_cost_usd or unknown>
 NUM_TURNS: <num_turns or unknown>
 BOUNDARY_EVENTS: <count> denial(s): <tool_name summary list, or none>
 PROTECTED_STATE: unchanged | violation | error
 WORKTREE_DELTA: changed | empty | error
+SCOPE: ok (N changed paths within M allowed globs) | unchecked (no --allow-path given) | changed path(s) outside allowed scope: <paths>
 MODEL_SAID:
 <the result text verbatim>
 ```
@@ -120,11 +150,18 @@ a model's self-report. A failing verification, a partial diff, or a missing
 required file cannot be `complete-candidate` regardless of what this report
 says.
 
-This lane has no commit, merge, deploy, or Production authority. It cannot
-mutate a Production database or billing system, enable a Production feature
-flag, or perform any other irreversible external action; those remain
-exclusively with `HUMAN_RELEASE_AUTHORITY`, exactly as in
+This lane has no commit, merge, deploy, or Production authority. It never
+runs `git commit`, `git push`, or a deploy command itself, and cannot enable a
+Production feature flag or perform any other irreversible external action;
+those remain exclusively with `HUMAN_RELEASE_AUTHORITY`, exactly as in
 [`IMPLEMENTATION_LANE_CONTRACT.md`](IMPLEMENTATION_LANE_CONTRACT.md#evidence-and-acceptance).
+That is an authority boundary the lane's own invocation enforces, not a claim
+that the host environment is safe to run untrusted specs in: an allowlisted
+Bash command runs with whatever credentials, network access, and filesystem
+visibility the host process already has, and nothing here strips those. The
+absence of commit/merge/deploy authority is a residual gap, not a guarantee,
+for any spec that can reach a Production credential through that inherited
+environment.
 
 ## Residual gaps (recorded, not closed)
 
@@ -145,6 +182,23 @@ exclusively with `HUMAN_RELEASE_AUTHORITY`, exactly as in
 - `--restricted` confines the file tools to the working directories but does
   not bound the network; `NETWORK: bounded by the Bash allowlist only`
   remains the honest statement.
+- An allowlisted Bash command inherits the host process's environment
+  variables, credentials, and filesystem visibility in full; the lane does
+  not strip, scope, or sandbox any of that before the command runs.
+- A Bash command can start a process that outlives the `claude` invocation
+  (for example a detached background job); the lane's guards only compare
+  worktree state before and after, so such a process is not tracked or
+  killed by anything in this contract.
+- Claude auto-approves its own built-in read-only shell commands (for
+  example `echo`) even under `--restricted`; these never appear in
+  `permission_denials` and are not counted as boundary events.
+- `protected-paths.rb` records a symlink's target *path*, not the contents at
+  that target, so a protected symlink whose target file changes without the
+  symlink itself changing is not detected as a violation.
+- `--allow-path` matches changed *paths* against globs, not their content; a
+  changed path within an allowed glob is never inspected for what it now
+  contains. It is also only enforced when at least one `--allow-path` is
+  passed — by default `SCOPE` is `unchecked`, not a passing check.
 
 ## Calibration record
 

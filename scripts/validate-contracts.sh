@@ -205,6 +205,9 @@ require_text contracts/CLAUDE_LANE_CONTRACT.md 'PROTECTED_STATE_VIOLATION'
 require_text scripts/run-claude-lane.sh '--restricted'
 require_text scripts/run-claude-lane.sh '--permission-prompts none'
 require_text scripts/run-claude-lane.sh '--no-session-persistence'
+require_text scripts/run-claude-lane.sh '--strict-mcp-config'
+require_text scripts/parse-lane-result.rb 'SCOPE_VIOLATION'
+require_text contracts/CLAUDE_LANE_CONTRACT.md 'SCOPE_VIOLATION'
 if rg --quiet -- '--fallback-model' scripts/run-claude-lane.sh; then
   fail 'run-claude-lane.sh must never pass --fallback-model'
 fi
@@ -214,9 +217,11 @@ fi
 printf 'PASS: Claude lane invocation boundary contract\n'
 
 require_text acceptance/ACCEPTANCE_EVIDENCE.md '## Claude lane calibration'
+require_text acceptance/ACCEPTANCE_EVIDENCE.md 'Not counted: bootstrap'
 require_text README.md 'provisional** default implementer'
 require_text skills/orchestration/SKILL.md 'provisional** default implementer'
 require_text contracts/CLAUDE_LANE_CONTRACT.md '## Calibration record'
+require_text docs/CAPABILITY_AUDIT.md '## Claude lane boundary probes'
 printf 'PASS: Claude lane calibration is recorded\n'
 
 ./tests/timeout-contract.sh

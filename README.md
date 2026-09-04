@@ -205,15 +205,27 @@ invocation.
 `IMPLEMENTER_CLAUDE` runs `scripts/run-claude-lane.sh`, a headless
 `claude -p --restricted` invocation with an explicit tool allowlist and deny
 list, plus the same `worktree-delta.rb` / `protected-paths.rb` guards used by
-the Codex lanes. Calibration completed 2026-09-04: three real specs, 3 of 3
-`complete-candidate` results accepted by the architect after independent
-verification, so `claude-sonnet-5` is the **provisional** default implementer
-and `claude-opus-5` the escalation lane; provisional means reviewed again on
+the Codex lanes. Calibration completed 2026-09-04: of the specs run through
+`run-claude-lane.sh` itself, every one that finished reached
+`complete-candidate` and was accepted by the architect after independent
+verification (one run was separately halted mid-task by an account usage
+limit — a transport failure, not a rejection — and completed in a follow-up
+session), so `claude-sonnet-5` is the **provisional** default implementer and
+`claude-opus-5` the escalation lane; provisional means reviewed again on
 every later PR and never a long-term proof of capability. The record is in
 `acceptance/ACCEPTANCE_EVIDENCE.md`. The Codex lanes remain the independent,
 cross-family capability; this lane does not replace them. The same failure
 taxonomy and human authority boundary apply. See
 [`contracts/CLAUDE_LANE_CONTRACT.md`](contracts/CLAUDE_LANE_CONTRACT.md).
+
+### Running the lane
+
+`scripts/run-claude-lane.sh`, `scripts/parse-lane-result.rb`, and
+`scripts/probe-model-map.sh` require `python3` and `ruby` on `PATH` and fail
+closed if either is missing; when a spec's own task is to edit these lane
+scripts, run the lane from a checkout other than the `WORKDIR` being edited,
+since a self-editing runner or parser could execute or parse a half-written
+version of itself mid-run.
 
 ## Human authority boundary
 

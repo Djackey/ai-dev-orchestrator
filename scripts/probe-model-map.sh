@@ -81,6 +81,13 @@ PY
   [ -n "$canonical" ] || ANY_UNRESOLVED=1
 done
 
+if [ "$ANY_UNRESOLVED" -eq 1 ]; then
+  UNRESOLVED_LIST=$(awk -F'\t' '$2 == "" { print $1 }' "$ALIASES_FILE" | tr '\n' ' ')
+  printf 'ERROR: alias(es) failed to resolve to a single modelUsage key: %s\n' "$UNRESOLVED_LIST" >&2
+  printf 'ERROR: no model map was written; a partial map must never exist on disk\n' >&2
+  exit 1
+fi
+
 CLAUDE_VERSION=$CLAUDE_VERSION GENERATED_AT=$GENERATED_AT \
 python3 - "$OUTPUT_PATH" "$ALIASES_FILE" "$COSTS_FILE" <<'PY'
 import json
@@ -123,11 +130,6 @@ compose_exit=$?
 
 if [ "$compose_exit" -ne 0 ]; then
   printf 'ERROR: failed to write model map to %s\n' "$OUTPUT_PATH" >&2
-  exit 1
-fi
-
-if [ "$ANY_UNRESOLVED" -eq 1 ]; then
-  printf 'ERROR: one or more aliases could not be uniquely resolved to a single modelUsage key; see %s\n' "$OUTPUT_PATH" >&2
   exit 1
 fi
 

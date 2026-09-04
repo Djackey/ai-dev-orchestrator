@@ -1,23 +1,35 @@
 #!/bin/sh
 set -u
 
+# Hard dependencies: python3 (model-map parsing) and ruby (guards, parser).
+# This script fails closed if either is missing from PATH.
+
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 
 LANE_PREAMBLE='You are an implementation lane. Change only the files the spec allows. Run the VERIFICATION command(s) and paste their actual output. Never commit, merge, push, deploy, or edit files outside the working directory. End your final message with a block containing the lines CHANGES:, VERIFIED:, JUDGMENT_CALLS:, GAPS:.'
 
 ALIAS=
 EXPECTED_CANONICAL=
+MAP_GENERATED_AT=
+MAP_CLAUDE_VERSION=
+ALLOW_PATH_LIST=
 
 unavailable() {
   classification=$1
   reason=$2
-  requested=$ALIAS
-  [ -z "$EXPECTED_CANONICAL" ] || requested=$EXPECTED_CANONICAL
-  [ -n "$requested" ] || requested=unknown
+  requested_alias=$ALIAS
+  [ -n "$requested_alias" ] || requested_alias=unknown
+  expected_display=$EXPECTED_CANONICAL
+  [ -n "$expected_display" ] || expected_display=unresolved
+  map_generated=$MAP_GENERATED_AT
+  [ -n "$map_generated" ] || map_generated=unknown
+  map_version=$MAP_CLAUDE_VERSION
+  [ -n "$map_version" ] || map_version=unknown
   printf '%s\n' \
     'IMPLEMENTATION REPORT' \
     'LANE: claude' \
-    "REQUESTED_MODEL: $requested" \
+    "REQUESTED_ALIAS: $requested_alias" \
+    "EXPECTED_CANONICAL: $expected_display (model map $map_generated, claude $map_version)" \
     'RESOLVED_MODEL_EVIDENCE: unavailable' \
     'STATUS: unavailable' \
     "CLASSIFICATION: $classification" \
@@ -27,16 +39,20 @@ unavailable() {
     'BOUNDARY_EVENTS: 0 denial(s): none' \
     'PROTECTED_STATE: error' \
     'WORKTREE_DELTA: error' \
+    'SCOPE: unchecked (no --allow-path given)' \
     'MODEL_SAID:' \
     ''
   exit 1
 }
 
+command -v python3 >/dev/null 2>&1 || unavailable GUARD_FAILED 'python3 not found on PATH (hard dependency)'
+command -v ruby >/dev/null 2>&1 || unavailable GUARD_FAILED 'ruby not found on PATH (hard dependency)'
+
 SPEC_FILE=${1-}
 ALIAS=${2-}
 WORKDIR=${3-}
 [ -n "$SPEC_FILE" ] && [ -n "$ALIAS" ] && [ -n "$WORKDIR" ] || \
-  unavailable GUARD_FAILED 'usage: run-claude-lane.sh SPEC_FILE ALIAS WORKDIR [--effort LEVEL] [--max-turns N] [--max-budget-usd X] [--allow-bash PREFIX]... [--model-map PATH]'
+  unavailable GUARD_FAILED 'usage: run-claude-lane.sh SPEC_FILE ALIAS WORKDIR [--effort LEVEL] [--max-turns N] [--max-budget-usd X] [--allow-bash PREFIX]... [--allow-path GLOB]... [--model-map PATH]'
 shift 3
 
 EFFORT=
@@ -51,6 +67,8 @@ while [ $# -gt 0 ]; do
     --max-turns) MAX_TURNS=${2-}; shift 2 ;;
     --max-budget-usd) MAX_BUDGET_USD=${2-}; shift 2 ;;
     --allow-bash) ALLOW_BASH_LIST="$ALLOW_BASH_LIST
+${2-}"; shift 2 ;;
+    --allow-path) ALLOW_PATH_LIST="$ALLOW_PATH_LIST
 ${2-}"; shift 2 ;;
     --model-map) MODEL_MAP_PATH=${2-}; shift 2 ;;
     *) unavailable GUARD_FAILED "unknown argument: $1" ;;
@@ -71,12 +89,35 @@ CLAUDE_VERSION_OUTPUT=$("$CLAUDE_BIN" --version 2>&1) || version_exit=$?
 [ -n "$MODEL_MAP_PATH" ] || MODEL_MAP_PATH=$ROOT/docs/model-map.json
 [ -f "$MODEL_MAP_PATH" ] || unavailable MODEL_UNRESOLVED "model map not found: $MODEL_MAP_PATH"
 
-MAP_PROBE=$(python3 - "$MODEL_MAP_PATH" "$ALIAS" <<'PY'
+MAP_GENERATED_AT=$(python3 -c '
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        data = json.load(f)
+    value = data.get("generatedAt") if isinstance(data, dict) else None
+    print(value if isinstance(value, str) else "")
+except Exception:
+    print("")
+' "$MODEL_MAP_PATH")
+
+MAP_CLAUDE_VERSION=$(python3 -c '
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        data = json.load(f)
+    value = data.get("claudeVersion") if isinstance(data, dict) else None
+    print(value if isinstance(value, str) else "")
+except Exception:
+    print("")
+' "$MODEL_MAP_PATH")
+
+MAP_PROBE=$(python3 - "$MODEL_MAP_PATH" "$ALIAS" "$CLAUDE_VERSION_OUTPUT" <<'PY'
 import datetime
 import json
+import re
 import sys
 
-path, alias = sys.argv[1], sys.argv[2]
+path, alias, running_version = sys.argv[1], sys.argv[2], sys.argv[3]
 try:
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
@@ -94,6 +135,10 @@ if not isinstance(aliases, dict) or alias not in aliases or aliases[alias] is No
     sys.exit(0)
 
 canonical = aliases[alias]
+if not isinstance(canonical, str) or not re.match(r"^claude-[a-z0-9.-]+$", canonical):
+    print("BADCANONICAL")
+    sys.exit(0)
+
 generated_raw = data.get("generatedAt")
 if not isinstance(generated_raw, str):
     print("ERROR:generatedAt missing or not a string")
@@ -108,11 +153,21 @@ except ValueError as exc:
 if generated.tzinfo is None:
     generated = generated.replace(tzinfo=datetime.timezone.utc)
 
-age_days = (datetime.datetime.now(datetime.timezone.utc) - generated).total_seconds() / 86400.0
+now = datetime.datetime.now(datetime.timezone.utc)
+age_days = (now - generated).total_seconds() / 86400.0
+if age_days < 0:
+    print("FUTURE")
+    sys.exit(0)
 if age_days > 30:
     print("STALE:%s" % canonical)
-else:
-    print("OK:%s" % canonical)
+    sys.exit(0)
+
+map_version = data.get("claudeVersion")
+if map_version != running_version:
+    print("VERSIONMISMATCH:%s" % map_version)
+    sys.exit(0)
+
+print("OK:%s" % canonical)
 PY
 )
 
@@ -122,6 +177,16 @@ case "$MAP_PROBE" in
     ;;
   UNRESOLVED)
     unavailable MODEL_UNRESOLVED "alias '$ALIAS' is not present or is null in the model map $MODEL_MAP_PATH"
+    ;;
+  BADCANONICAL)
+    unavailable MODEL_UNRESOLVED "model map canonical for $ALIAS is not a model id"
+    ;;
+  FUTURE)
+    unavailable MAPPING_STALE 'model map generatedAt is in the future'
+    ;;
+  VERSIONMISMATCH:*)
+    map_version_seen=${MAP_PROBE#VERSIONMISMATCH:}
+    unavailable MAPPING_STALE "model map was probed with $map_version_seen, running $CLAUDE_VERSION_OUTPUT; re-run scripts/probe-model-map.sh"
     ;;
   STALE:*)
     EXPECTED_CANONICAL=${MAP_PROBE#STALE:}
@@ -146,7 +211,9 @@ DELTA_STATE=$(mktemp -t claude-lane-delta.XXXXXX)
 PROTECTED_STATE=$(mktemp -t claude-lane-protected.XXXXXX)
 JSON_FILE=$(mktemp -t claude-lane-result.XXXXXX)
 ERROR_FILE=$(mktemp -t claude-lane-error.XXXXXX)
-trap 'rm -f "$DELTA_STATE" "$PROTECTED_STATE" "$JSON_FILE" "$ERROR_FILE"' EXIT HUP INT TERM
+GUARD_ERROR_FILE=$(mktemp -t claude-lane-guard-error.XXXXXX)
+DELTA_STDOUT_FILE=$(mktemp -t claude-lane-delta-out.XXXXXX)
+trap 'rm -f "$DELTA_STATE" "$PROTECTED_STATE" "$JSON_FILE" "$ERROR_FILE" "$GUARD_ERROR_FILE" "$DELTA_STDOUT_FILE"' EXIT HUP INT TERM
 
 delta_snapshot_exit=0
 ruby "$ROOT/scripts/worktree-delta.rb" snapshot "$DELTA_STATE" "$WORKDIR" >/dev/null 2>"$ERROR_FILE" || delta_snapshot_exit=$?
@@ -164,7 +231,7 @@ import os
 import sys
 
 workdir = sys.argv[1]
-patterns = ["./.env", "./.env.*", "./.claude/settings.local.json", "./.codex/**", "./.npmrc", "./.git/**"]
+patterns = ["./.env", "./.env.*", "./.claude/**", "./.codex/**", "./.npmrc", "./.git/**"]
 
 config_path = os.path.join(workdir, ".ai-orchestrator-protected-paths")
 if os.path.isfile(config_path):
@@ -202,7 +269,7 @@ if [ -n "$ALLOW_BASH_LIST" ]; then
   IFS=$OLD_IFS
 fi
 
-set -- -p --restricted \
+set -- -p --restricted --strict-mcp-config \
   --tools "Read,Edit,Write,Grep,Glob,Bash" \
   --allowedTools "$ALLOWED_TOOLS" \
   --permission-mode acceptEdits --permission-prompts none \
@@ -215,18 +282,32 @@ set -- -p --restricted \
 
 set -- "$@" \
   --output-format json --no-session-persistence \
-  --append-system-prompt "$LANE_PREAMBLE" \
-  "$(cat "$SPEC_FILE")"
+  --append-system-prompt "$LANE_PREAMBLE"
 
 CLAUDE_EXIT=0
-(cd "$WORKDIR" && "$CLAUDE_BIN" "$@") > "$JSON_FILE" 2> "$ERROR_FILE" || CLAUDE_EXIT=$?
+(cd "$WORKDIR" && "$CLAUDE_BIN" "$@") < "$SPEC_FILE" > "$JSON_FILE" 2> "$ERROR_FILE" || CLAUDE_EXIT=$?
 
 # --- Post-run guard checks ---------------------------------------------------
 
 DELTA_EXIT=0
-ruby "$ROOT/scripts/worktree-delta.rb" check "$DELTA_STATE" "$WORKDIR" >/dev/null 2>/dev/null || DELTA_EXIT=$?
+ruby "$ROOT/scripts/worktree-delta.rb" check "$DELTA_STATE" "$WORKDIR" > "$DELTA_STDOUT_FILE" 2>"$GUARD_ERROR_FILE" || DELTA_EXIT=$?
 
 PROTECTED_EXIT=0
-ruby "$ROOT/scripts/protected-paths.rb" check "$PROTECTED_STATE" "$WORKDIR" >/dev/null 2>/dev/null || PROTECTED_EXIT=$?
+ruby "$ROOT/scripts/protected-paths.rb" check "$PROTECTED_STATE" "$WORKDIR" >/dev/null 2>>"$GUARD_ERROR_FILE" || PROTECTED_EXIT=$?
 
-ruby "$ROOT/scripts/parse-lane-result.rb" "$JSON_FILE" "$EXPECTED_CANONICAL" "$DELTA_EXIT" "$PROTECTED_EXIT" "$CLAUDE_EXIT"
+set -- "$JSON_FILE" "$EXPECTED_CANONICAL" "$ALIAS" "$DELTA_EXIT" "$PROTECTED_EXIT" "$CLAUDE_EXIT" \
+  "$ERROR_FILE" "$GUARD_ERROR_FILE" "$DELTA_STDOUT_FILE"
+
+if [ -n "$ALLOW_PATH_LIST" ]; then
+  OLD_IFS=$IFS
+  IFS='
+'
+  for glob in $ALLOW_PATH_LIST; do
+    [ -n "$glob" ] || continue
+    set -- "$@" "$glob"
+  done
+  IFS=$OLD_IFS
+fi
+
+CLAUDE_LANE_MAP_GENERATED_AT="$MAP_GENERATED_AT" CLAUDE_LANE_MAP_CLAUDE_VERSION="$MAP_CLAUDE_VERSION" \
+  ruby "$ROOT/scripts/parse-lane-result.rb" "$@"
