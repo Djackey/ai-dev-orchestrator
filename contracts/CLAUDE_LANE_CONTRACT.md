@@ -125,3 +125,23 @@ mutate a Production database or billing system, enable a Production feature
 flag, or perform any other irreversible external action; those remain
 exclusively with `HUMAN_RELEASE_AUTHORITY`, exactly as in
 [`IMPLEMENTATION_LANE_CONTRACT.md`](IMPLEMENTATION_LANE_CONTRACT.md#evidence-and-acceptance).
+
+## Residual gaps (recorded, not closed)
+
+- Allowlisted Bash commands run without an OS sandbox. Repository code
+  executed by an allowlisted command (for example a test suite the
+  implementer can edit) could in principle locate and rewrite the guard
+  baselines under `$TMPDIR`; the baselines have random `mktemp` names and the
+  architect re-reads the actual diff, but closing this gap requires
+  OS-level sandboxing, which this lane does not provide.
+- A `--settings` deny-list refusal ("File is in a directory that is denied by
+  your permission settings") does not appear in `permission_denials`; only
+  prompts that would have needed approval do. The deterministic
+  `protected-paths.rb` check is therefore the load-bearing evidence for
+  protected local state.
+- An allowlist prefix such as `Bash(pnpm test:*)` is matched after leading
+  environment assignments are stripped, so `LANG=C pnpm test` is accepted;
+  the prefix still cannot be used to run a different program.
+- `--restricted` confines the file tools to the working directories but does
+  not bound the network; `NETWORK: bounded by the Bash allowlist only`
+  remains the honest statement.

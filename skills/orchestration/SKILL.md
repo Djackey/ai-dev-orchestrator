@@ -254,10 +254,11 @@ from captured Codex startup evidence.
 `IMPLEMENTER_CLAUDE` runs `${CLAUDE_PLUGIN_ROOT}/scripts/run-claude-lane.sh`, a
 headless `claude -p --restricted` invocation with an explicit tool allowlist
 and deny list, plus the same `worktree-delta.rb` / `protected-paths.rb` guards
-used by the Codex lanes. It is a candidate default under a provisional
-calibration: three real specs were run against it, and 2 of 3
-`complete-candidate` results accepted by the architect made it the provisional
-default, reviewed again on every later PR. The Codex lanes remain the
+used by the Codex lanes. It becomes the provisional default only after a
+calibration of three real specs in which the architect accepts at least 2 of
+3 `complete-candidate` results after independent verification; the
+provisional status is reviewed again on every later PR, and a calibration is
+never long-term proof of capability. The Codex lanes remain the
 independent, cross-family capability; this lane does not replace them. The
 same failure taxonomy and human authority boundary apply. See
 `${CLAUDE_PLUGIN_ROOT}/contracts/CLAUDE_LANE_CONTRACT.md`.

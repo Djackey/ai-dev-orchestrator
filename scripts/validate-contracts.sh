@@ -57,6 +57,8 @@ printf 'PASS: Claude plugin manifest validation\n'
 
 command -v ruby >/dev/null 2>&1 || fail 'ruby unavailable for YAML frontmatter validation'
 ./scripts/validate-frontmatter.rb
+env -u LANG -u LC_ALL -u LC_CTYPE ./scripts/validate-frontmatter.rb >/dev/null || fail 'validate-frontmatter.rb must not depend on the process locale'
+printf 'PASS: frontmatter validation is locale-independent\n'
 
 python3 -c '
 import json

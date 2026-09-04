@@ -37,6 +37,7 @@ for alias in sonnet opus haiku fable; do
     --output-format json \
     --max-turns 1 \
     --no-session-persistence \
+    --tools "" \
     > "$probe_file" 2> "$probe_error_file" || true
 
   canonical=$(python3 - "$probe_file" <<'PY'
