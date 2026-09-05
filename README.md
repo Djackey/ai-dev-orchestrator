@@ -53,6 +53,7 @@ the doctrine:
 | `IMPLEMENTER_MECHANICAL` | GPT-5.6 Luna | `codex-implementer` | spec-determined implementation |
 | `IMPLEMENTER_BALANCED` | GPT-5.6 Terra | `terra-implementer` | ordinary software engineering with local judgment |
 | `IMPLEMENTER_FRONTIER` | GPT-5.6 Sol | `sol-implementer` | high-risk, judgment-heavy escalation |
+| `IMPLEMENTER_CLAUDE` | Claude Sonnet 5, provisional default implementer (candidate lane) · Opus 5 escalation | `scripts/run-claude-lane.sh` (headless, restricted) | spec-determined implementation in the Claude family, restricted headless |
 | `VISUAL_IMPLEMENTER` | Claude Opus, optional | not shipped in V1 | visual/UX and Claude-ecosystem work after runtime pin evidence is reliable |
 | `CLEAN_CONTEXT_REVIEWER` | Fable 5.1 | `fable-advisor` | fresh-context, assumption-reset review |
 | `HUMAN_RELEASE_AUTHORITY` | the user | explicit decision | Production authorization |
@@ -198,6 +199,53 @@ write lane yet. See the dated [capability audit](docs/CAPABILITY_AUDIT.md).
 The `model: sonnet` frontmatter on Codex implementers selects their lightweight
 Claude supervisor. Luna/Terra/Sol are selected only by the captured `codex exec`
 invocation.
+
+## Claude implementation lane — provisional default implementer (candidate lane)
+
+`IMPLEMENTER_CLAUDE` runs `scripts/run-claude-lane.sh`, a headless
+`claude -p --restricted` invocation with an explicit tool allowlist and deny
+list, plus the same `worktree-delta.rb` / `protected-paths.rb` guards used by
+the Codex lanes. Calibration completed 2026-09-04: of the specs run through
+`run-claude-lane.sh` itself, every one that finished reached
+`complete-candidate` and was accepted by the architect after independent
+verification (one run was separately halted mid-task by an account usage
+limit — a transport failure, not a rejection — and completed in a follow-up
+session), so `claude-sonnet-5` is the **provisional** default implementer
+(candidate lane) and `claude-opus-5` the escalation lane; provisional means
+reviewed again on every later PR and never a long-term proof of capability.
+The record is in `acceptance/ACCEPTANCE_EVIDENCE.md`. The Codex lanes remain the independent,
+cross-family capability; this lane does not replace them. The same failure
+taxonomy and human authority boundary apply. See
+[`contracts/CLAUDE_LANE_CONTRACT.md`](contracts/CLAUDE_LANE_CONTRACT.md).
+
+### Running the lane
+
+`scripts/run-claude-lane.sh` requires POSIX `sh`, `python3` (for the model-map
+validation) and `ruby` (for the two guards and the result parser) on `PATH`,
+and fails closed if either interpreter is missing. `scripts/probe-model-map.sh`
+requires `sh` and `python3` only, no `ruby`. `scripts/parse-lane-result.rb`,
+`scripts/worktree-delta.rb`, and `scripts/protected-paths.rb` require `ruby`
+only. `mktemp -t`, as used by the runner and the probe, targets both macOS and
+GNU `mktemp`.
+
+The runner refuses to run from inside `WORKDIR`: it compares the physical path
+of its own checkout against the physical path of `WORKDIR` and reports
+`unavailable`/`GUARD_FAILED` if they coincide or the checkout is nested inside
+`WORKDIR`, since a self-editing runner or parser could otherwise execute or
+parse a half-written version of itself mid-run. When a spec's own task is to
+edit these lane scripts, invoke the runner from a checkout other than the
+`WORKDIR` being edited.
+
+`--allow-bash` prefixes are charset-checked, must start with a bare program
+name (no path, wrapper or environment assignment), and a `git` prefix must
+name a read-only subcommand (`status`, `diff`, `log`, `show`, `ls-files`,
+`rev-parse`, `blame`, `grep`). This is a lint on what the architect types,
+not a sandbox: trailing arguments and programs of other names are not
+inspected (see the contract's residual gaps).
+
+Shell-script execution (`sh`, `bash`, `zsh`) is not available inside this
+lane's own `--restricted` boundary; a spec whose verification is a shell test
+suite must say the architect runs it, not the implementer.
 
 ## Human authority boundary
 

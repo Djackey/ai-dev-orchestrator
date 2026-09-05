@@ -114,3 +114,113 @@ the marketplace manifest but returned an empty `contents` list; it did not prove
 agent or skill frontmatter validity. V1 therefore also parses every agent and
 the orchestration skill with Ruby's YAML parser in
 `scripts/validate-frontmatter.rb`.
+
+## Claude lane probes — 2026-09-04
+
+Measured by the architect on Claude Code 2.1.260, with `claude.ai` OAuth auth
+and the `firstParty` provider. These are point-in-time observations, not a
+portability promise.
+
+Alias probes via `claude -p --output-format json --max-turns 1`:
+
+| Requested alias | Observed `modelUsage` canonical model | Probe cost (USD) |
+|---|---|---|
+| `sonnet` | `claude-sonnet-5` | `0.0794` |
+| `opus` | `claude-opus-5` | `0.1656` |
+| `haiku` | `claude-haiku-4-5-20251001` | `0.0259` |
+| `fable` | `claude-fable-5-1` | proven earlier in this file |
+
+`--restricted --tools Bash --allowedTools "Bash(pnpm test:*)" --permission-prompts none`:
+a `curl` command was denied and appeared in `permission_denials`; a `git commit`
+command was denied and appeared in `permission_denials`.
+
+`--restricted` with `Read,Edit,Write`: a `Write` to `/tmp`, outside the working
+directory, was denied and appeared in `permission_denials`; a `Write` to
+`./.env`, inside the working directory, was ALLOWED when no deny rule was set.
+
+`--settings '{"permissions":{"deny":["Edit(./.env)","Write(./.env)","Write(./.git/**)",...]}}'`:
+writes to `./.env` and `./.git/hooks/pre-commit` were refused with "File is in
+a directory that is denied by your permission settings", the file system was
+unchanged, and these refusals did NOT appear in `permission_denials` — so the
+deterministic protected-paths guard remains the load-bearing check, not
+`--settings` alone.
+
+`--max-budget-usd 0.005`: the run ended with `subtype error_max_budget_usd` and
+`is_error true`.
+
+The in-session Agent tool (haiku probe) returned only text and token counts, no
+model identity; therefore the lane is a headless CLI runner, not a nested
+agent.
+
+`--fallback-model` exists in this CLI version and must never be passed by a
+lane.
+
+## Claude lane dogfood observations — 2026-09-04
+
+Two boundary observations from dogfooding the Claude lane:
+
+(a) Under `--restricted` with a Bash allowlist, an attempted `perl -pi`
+in-place file edit was denied and appeared in `permission_denials`, so file
+mutation must go through the Edit/Write tools where the deny list applies.
+
+(b) An allowlist prefix such as `Bash(pnpm exec:*)` is broad — `pnpm exec tsx
+<script>` runs arbitrary repository code — so an architect who allows it
+accepts that the implementer can execute code it wrote; the worktree-delta
+guard still reports every resulting file change.
+
+## Claude lane boundary probes — 2026-09-04 (settings, MCP, stdin)
+
+Probes on `claude-haiku-4-5-20251001` (model chosen to keep probe cost low;
+haiku, ≈USD 0.05 total across the probes below):
+
+- `--restricted` with `permissions.allow` containing `Bash(python3:*)` did
+  NOT permit a `python3` invocation, checked across 3/3 repeated runs: the
+  command was still denied and appeared in `permission_denials`. An `allow`
+  entry in `--settings` does not override `--restricted`'s own tool gate.
+- `echo PROBE_OK` ran successfully with no allowlist entry for it at all, and
+  with no corresponding denial in `permission_denials` — Claude treats its
+  own built-in read-only shell commands as always-approved (see the residual
+  gap recorded in the contract).
+- `--strict-mcp-config` was accepted together with `--setting-sources ""`;
+  neither flag caused a transport error, and no MCP server configuration was
+  discovered or loaded.
+- The `--settings` deny of `./.env` held: a `Write` to `./.env` was refused
+  with "File is in a directory that is denied by your permission settings"
+  and the file was unchanged on disk, consistent with the earlier `--settings`
+  probe above.
+- Piping the prompt on stdin (`claude -p --restricted ... < spec.txt`, no
+  positional prompt argument) worked exactly as passing the same text as an
+  argument did in earlier probes; the model received and acted on the full
+  spec text.
+
+### Operating observations
+
+O1: When a spec's own instructions are to edit the lane's scripts
+(`scripts/run-claude-lane.sh`, `scripts/parse-lane-result.rb`, etc.), the
+runner must be invoked from a checkout that is NOT the `WORKDIR` being edited.
+`sh` reads a script incrementally as it executes, and the guard/parser
+invocation happens after the model process exits; if the running script were
+also the file being rewritten mid-run, a partially written script could be
+executed, and a partially written parser could be asked to parse a contract
+it no longer matches. The same one-sentence rule is recorded in `README.md`
+under "Running the lane".
+
+O1b: In run5 (2026-09-05), the run that produced commit `cf99ece` (the
+clean-context round-2 fixes, calibration row 5), the allowlisted Bash prefixes `sh tests/` and
+`sh scripts/validate-contracts.sh` did not permit `sh tests/claude-lane-contract.sh`
+or `sh scripts/validate-contracts.sh` to run: the model reported every `sh`,
+`bash`, and `zsh` invocation denied (13 Bash boundary events, no Read/Edit/Write
+denial, no approval surface offered). Treat shell-script execution as
+unavailable inside this lane; a spec whose verification is a shell test suite
+must say the architect runs it, not the implementer. The same fact is recorded
+in one sentence in `README.md` under "Running the lane".
+
+O2: An account usage limit hit mid-run surfaces as `is_error: true` with
+model text "You've hit your session limit"; observed 2026-09-04 after 20
+turns and USD 1.22 of a longer run. The runner classified this
+`unavailable`/`TRANSPORT_FAILED` with `WORKTREE_DELTA: changed` — the
+classification was correct (a real transport failure, not a boundary event),
+but the worktree was left with a real partial diff from the turns that did
+complete. The operator must inspect that partial diff by hand before
+re-dispatching the spec; the runner has no way to know whether the partial
+work is safe to keep, discard, or resume from.

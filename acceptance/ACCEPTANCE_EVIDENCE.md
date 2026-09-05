@@ -545,3 +545,89 @@ Read-only smoke against the real Shadow target, with **no locale workaround**
 (`LANG` and `LC_ALL` cleared, and again under C/POSIX): snapshot captured 2409
 files, `check` returned `STATUS: empty` with exit `3` in both, and the target
 repository was byte-for-byte unmodified.
+
+## Claude lane calibration — 2026-09-04
+
+Calibration rule: three real specs dispatched to the Claude lane on `sonnet`;
+the lane becomes the provisional default implementer if the architect accepts
+at least 2 of 3 `complete-candidate` results after independently re-running
+verification and reading the actual diff. Provisional means: reviewed again
+on every later PR; never a long-term capability proof.
+
+| # | Task | Repository | Model / effort | Turns | Cost (USD) | Boundary events | Guards | Architect verification | Outcome |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | Lane follow-up: calibration wording, residual-gaps section, locale-independent frontmatter validation, `--tools ""` on the probe | this repository | `claude-sonnet-5` / medium | 18 | 0.67 | 0 | delta changed; protected unchanged | re-run with LANG, LC_ALL and LC_CTYPE unset: 11/11 lane cases, 103 contract validations passed | accepted |
+| 2 | A product painted-door feature (an analytics-only chip row plus a vitest suite) in the downstream product repository | downstream product repository | `claude-sonnet-5` / high | 35 | 1.76 | 0 | delta changed; protected unchanged | lint (tsc) 0; targeted suites 188 tests; full suite 1984 tests | accepted |
+| 3 | Claude lane — review fixes (cross-family and clean-context FIX_FIRST items), first attempt | this repository | `claude-sonnet-5` / high | 20 | 1.22 | 0 | delta changed; protected unchanged | not applicable — the run did not finish | `is_error: true`, model text "You've hit your session limit"; classified `unavailable`/`TRANSPORT_FAILED` (see the operating observation in `docs/CAPABILITY_AUDIT.md`); the worktree carried a real partial diff that a later session inspected and completed |
+| 4 | Claude lane — review fixes (cross-family and clean-context FIX_FIRST items), continuation of row 3 from the partial diff | this repository | `claude-sonnet-5` / high | 66 | 3.97 | 2 Bash denials (boundary events, neither a Read/Edit/Write) | delta changed; protected unchanged | architect re-ran `tests/claude-lane-contract.sh` (20/20) and `scripts/validate-contracts.sh` under a UTF-8 locale and with LANG, LC_ALL and LC_CTYPE unset (both passed), read the full diff, and then ran the rewritten runner end to end on the real CLI with `claude-haiku-4-5-20251001` against a throwaway git directory: `--allow-path 'src/**'` → `complete-candidate`, `SCOPE: ok (1 changed paths within 1 allowed globs)`, USD 0.03; `--allow-path 'docs/**'` on the same spec → `refused`/`SCOPE_VIOLATION` naming `src/a.txt`, exit 3, USD 0.01; both reports carried `EXPECTED_CANONICAL ... (model map 2026-09-04T11:59:56Z, claude 2.1.260 (Claude Code))` and a matching `RESOLVED_MODEL_EVIDENCE` | accepted |
+| 5 | Claude lane — clean-context round-2 fixes (setting-sources, vacuous-scope guard, calibration arithmetic, wording) | this repository | `claude-sonnet-5` / high | 90 | 2.19 | 13 Bash denials (every `sh`/`bash`/`zsh`/`git init` attempt; no Read/Edit/Write denial) | delta changed; protected unchanged | runner verdict `refused`/`SCOPE_VIOLATION` naming `skills/orchestration/SKILL.md` — a false refusal: the shell expanded `--allow-path 'skills/**'` in the runner's cwd (defect D1 of the following commit); the architect read the full diff, ran `tests/claude-lane-contract.sh` (26/26) and `scripts/validate-contracts.sh` (ALL PASSED), and ran an end-to-end probe on the real CLI with `claude-haiku-4-5-20251001` (USD 0.015) proving the `--settings` deny list still holds with `--setting-sources ""`: reads of `.env.local` and `.git/HEAD` and a write to `.env.local` were denied, `PROTECTED_STATE: unchanged`, `permission_denials` empty (deny-list denials still do not surface there) | accepted, commit cf99ece |
+| 6 | Claude lane — cross-family (Codex) round-2 fixes D1–D10 on `cf99ece` (literal globs, `--allow-bash` charset, refuse to run from inside WORKDIR, atomic probe write, option-value guard, contract wording, six new tests, row 5 above) | this repository | `claude-sonnet-5` / high | 59 | 2.45 | 2 Bash denials (both `sh` attempts on the test suite; no Read/Edit/Write denial) | delta changed; protected unchanged | dispatched from an empty launch directory to sidestep the glob expansion the run itself was fixing; the architect read the full diff and found one defect the lane's static checks cannot reach — an unquoted space inside the `--allow-bash` `case` pattern, a `sh` syntax error that made every run exit 2 — fixed it by quoting the space, verified the pattern under `sh`, `bash`, `dash`, `zsh`, corrected one misattributed sentence in `docs/CAPABILITY_AUDIT.md` (O1b named run5 as the Codex round) and one stale `ruby` requirement in `skills/orchestration/SKILL.md`, then ran `tests/claude-lane-contract.sh` (32/32 lettered cases, including (z1)–(z6)) and `scripts/validate-contracts.sh` (ALL PASSED) | accepted with architect corrections, committed with row 5 in the following commit |
+
+Result: the table above records 3 specs, not 4 — row 3 and row 4 are the same
+spec (row 3 hit a session limit before finishing; row 4 is its continuation
+from the partial diff through to completion). All 3 specs completed and all 3
+reached `complete-candidate` and were accepted (rows 1, 2, 4) →
+**`claude-sonnet-5` is the provisional default implementer as of
+2026-09-04.** Row 3 is not a fourth data point: it is a transport failure (a
+session-limit cutoff), excluded from the 3-spec count rather than counted
+against it. Limitation on this calibration: 2 of these 3 specs are the lane
+documenting or fixing itself (row 1, and the row 3/4 spec), not independent
+third-party tasks; the calibration is provisional in part for that reason,
+and row 2 (an unrelated downstream product task) is the only independent data
+point and the strongest single one.
+
+Row 7 is not a lane run: after the third Codex review (of `ad3222c`) returned
+FIX_FIRST on a fixed-name temporary file in the probe and on the contract's
+claim that the invocation "enforces" the authority boundary while
+`--allow-bash git` would emit `Bash(git:*)`, the architect made the
+corrections directly — a unique temporary file with `os.replace`, a refusal of
+any `--allow-bash` git prefix that is not a read-only subcommand, a rejection
+of option tokens as option values, the nested-checkout case, and the contract
+and README wording — with cases (z7)–(z9), and re-ran
+`tests/claude-lane-contract.sh` and `scripts/validate-contracts.sh`. The
+provenance of the model map and of `claude` on `PATH` stays an accepted
+residual gap: the architect's own environment is trusted by design, and the
+lane's claim is only that the implementer cannot alter it. A fourth, scoped
+Codex review (of `d0f7f32`) then showed the git rule was still bypassable by
+a path (`/opt/homebrew/bin/git commit`), a wrapper (`command`, `env`), a
+different letter case, or trailing arguments (`git diff --output=<file>`),
+and that the probe's `mkstemp` narrowed an existing `0644` map to `0600`.
+The architect refused the literal path/wrapper/assignment/case forms (case
+(z10)), preserved the map's mode, and rewrote the contract and README so the
+rule is described as a lint on the typed prefix with trailing arguments and
+same-named programs recorded as a residual gap, rather than as an enforced
+boundary.
+
+Rows 5 and 6 above are, like rows 1 and 3/4, the lane fixing itself, not new
+calibration data points; they do not change the 3-spec count or arithmetic in
+this section. Row 6 is also the first run in which the architect corrected the
+implementer's diff directly instead of re-dispatching: the defect was a shell
+syntax error the lane cannot detect (O1b) and the correction is one token.
+
+Not counted: bootstrap. Before `run-claude-lane.sh` existed, the architect
+hand-bracketed the same restricted `claude -p --restricted` invocation and the
+same two guards to have Claude implement the lane itself (runner, parser,
+probe, contract test, docs): `claude-sonnet-5` / xhigh, 55 turns, USD 3.15, 7
+Bash denials (environment probing such as `which`, `ls /usr/bin`, a direct
+`validate-frontmatter.rb` call), delta changed, protected state unchanged;
+11/11 lane contract cases and full contract validation passed under a UTF-8
+locale, and a pre-existing locale defect in `validate-frontmatter.rb`
+surfaced. It was accepted with two FIX_FIRST items (calibration sentence
+written in the past tense; residual gaps unrecorded), which became row 1
+above. This task is not counted toward the calibration rule because no runner
+existed yet to invoke it against — it is the reason the runner was built, not
+a data point about the runner.
+
+Escalation lane evidence (not part of the calibration): one frontier task in
+the downstream product repository ran on `claude-opus-5` / xhigh through the
+same restricted invocation — 121 turns, USD 15.87, 7 Bash denials including a
+blocked in-place `perl -pi` edit (the boundary refusing an unlisted program),
+protected state unchanged; the architect re-ran lint, the three new suites
+(52 tests, including a real-driver Postgres concurrency test over a loopback
+relay) and the full suite (1874); accepted with one follow-up (`claude-sonnet-5`
+/ high, 52 turns, USD 1.85, 57 targeted tests, 1879 full) that was also
+accepted.
+
+Both the calibration table and the escalation-lane paragraph above are claims
+independently re-verified by the architect — re-run verification, actual diff
+read — never the implementer's self-report.

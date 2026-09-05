@@ -38,11 +38,16 @@ for file in \
   scripts/parse-review-result.rb \
   scripts/worktree-delta.rb \
   scripts/protected-paths.rb \
+  scripts/run-claude-lane.sh \
+  scripts/parse-lane-result.rb \
+  scripts/probe-model-map.sh \
+  contracts/CLAUDE_LANE_CONTRACT.md \
   tests/codex-resolution-contract.sh \
   tests/reviewer-contract.sh \
   tests/worktree-delta-contract.sh \
   tests/protected-paths-contract.sh \
-  tests/evidence-gate-contract.sh; do
+  tests/evidence-gate-contract.sh \
+  tests/claude-lane-contract.sh; do
   require_file "$file"
 done
 
@@ -52,6 +57,8 @@ printf 'PASS: Claude plugin manifest validation\n'
 
 command -v ruby >/dev/null 2>&1 || fail 'ruby unavailable for YAML frontmatter validation'
 ./scripts/validate-frontmatter.rb
+env -u LANG -u LC_ALL -u LC_CTYPE ./scripts/validate-frontmatter.rb >/dev/null || fail 'validate-frontmatter.rb must not depend on the process locale'
+printf 'PASS: frontmatter validation is locale-independent\n'
 
 python3 -c '
 import json
@@ -191,12 +198,39 @@ if rg --quiet --glob '*.md' '(automatically|auto)[ -]?(deploy|merge|migrate).*Pr
 fi
 printf 'PASS: human authority boundary and no automatic Production path\n'
 
+require_text contracts/CLAUDE_LANE_CONTRACT.md 'NETWORK: bounded by the Bash allowlist only'
+require_text contracts/CLAUDE_LANE_CONTRACT.md 'never hardcoded'
+require_text contracts/CLAUDE_LANE_CONTRACT.md 'complete-candidate'
+require_text contracts/CLAUDE_LANE_CONTRACT.md 'PROTECTED_STATE_VIOLATION'
+require_text scripts/run-claude-lane.sh '--restricted'
+require_text scripts/run-claude-lane.sh '--permission-prompts none'
+require_text scripts/run-claude-lane.sh '--no-session-persistence'
+require_text scripts/run-claude-lane.sh '--strict-mcp-config'
+require_text scripts/parse-lane-result.rb 'SCOPE_VIOLATION'
+require_text contracts/CLAUDE_LANE_CONTRACT.md 'SCOPE_VIOLATION'
+if rg --quiet -- '--fallback-model' scripts/run-claude-lane.sh; then
+  fail 'run-claude-lane.sh must never pass --fallback-model'
+fi
+if rg --quiet -- 'dangerously-skip-permissions' scripts/run-claude-lane.sh; then
+  fail 'run-claude-lane.sh must never pass a dangerously-skip-permissions flag'
+fi
+printf 'PASS: Claude lane invocation boundary contract\n'
+
+require_text acceptance/ACCEPTANCE_EVIDENCE.md '## Claude lane calibration'
+require_text acceptance/ACCEPTANCE_EVIDENCE.md 'Not counted: bootstrap'
+require_text README.md 'provisional** default implementer'
+require_text skills/orchestration/SKILL.md 'provisional** default implementer'
+require_text contracts/CLAUDE_LANE_CONTRACT.md '## Calibration record'
+require_text docs/CAPABILITY_AUDIT.md '## Claude lane boundary probes'
+printf 'PASS: Claude lane calibration is recorded\n'
+
 ./tests/timeout-contract.sh
 ./tests/codex-resolution-contract.sh
 ./tests/reviewer-contract.sh
 ./tests/worktree-delta-contract.sh
 ./tests/protected-paths-contract.sh
 ./tests/evidence-gate-contract.sh
+./tests/claude-lane-contract.sh
 
 git diff --check
 printf 'PASS: git diff --check\n'

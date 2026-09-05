@@ -9,7 +9,8 @@ def fail_validation(message)
 end
 
 def frontmatter(path)
-  source = File.read(path)
+  source = File.read(path, encoding: "UTF-8")
+  fail_validation("#{path} is not valid UTF-8") unless source.valid_encoding?
   match = source.match(/\A---\n(.*?)\n---\n/m)
   fail_validation("#{path} has no complete YAML frontmatter") unless match
 
