@@ -223,9 +223,11 @@ environment.
   that a program of another name (`gitx`, a wrapper script on `PATH`) is
   git, and it does nothing for interpreter prefixes such as `ruby` or
   `python3`, which can run arbitrary code. Every `--allow-bash` prefix is a
-  grant the architect makes deliberately; what such a command then writes is
-  detected after the fact by the worktree and protected-paths guards, not
-  prevented.
+  grant the architect makes deliberately. What such a command then writes is
+  not prevented; it is detected after the fact only where the two guards
+  look — tracked and untracked paths under `WORKDIR` and the protected
+  patterns — and not for writes outside `WORKDIR`, ignored paths, `.git`
+  internals beyond the protected patterns, or effects on a remote.
 - An allowlist prefix such as `Bash(pnpm test:*)` is matched after leading
   environment assignments are stripped, so `LANG=C pnpm test` is accepted;
   the prefix still cannot be used to run a different program.
